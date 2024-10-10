@@ -1,5 +1,4 @@
-using RDE
-using Test
+using RDE, Test, TestItems, TestItemRunner
 
 @testitem "basic functionality" begin
     include("RLenv_tests.jl")
