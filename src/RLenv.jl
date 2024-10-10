@@ -4,35 +4,35 @@ using Interpolations
 # using DomainSets
 using POMDPs
 
-mutable struct RDEEnv <: AbstractEnv
-    prob::RDEProblem                  # RDE problem
-    state::Vector{Float64}  
-    observation::Vector{Float64}          
-    dt::Float64                       # time step
-    t::Float64                        # Current time
+mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
+    prob::RDEProblem{T}                  # RDE problem
+    state::Vector{T}  
+    observation::Vector{T}          
+    dt::T                       # time step
+    t::T                        # Current time
     done::Bool                        # Termination flag
-    reward::Float64
-    smax::Float64
-    u_pmax::Float64
+    reward::T
+    smax::T
+    u_pmax::T
     observation_samples::Int64
-    max_state_val::Float64
+    max_state_val::T
     reward_func::Function
     action_num::Int64
 
-    function RDEEnv(;
+    function RDEEnv(T::Type{<:AbstractFloat}=Float64;
         dt = 0.1,
         smax = 5.0,
         u_pmax = 3.0,
-        observation_samples = 10,
-        params = RDEParam(),
-        reward_func = RDE_reward_energy_balance!,
-        action_num = 10,
+        observation_samples::Int64 = 10,
+        params::RDEParam{T} = RDEParam(T),
+        reward_func::Function = RDE_reward_energy_balance!,
+        action_num::Int64 = 10,
         kwargs...)
-        prob = RDEProblem(params;kwargs...)
+        prob = RDEProblem(params, T;kwargs...)
         initial_state = vcat(prob.u0, prob.λ0)
-        init_observation = Vector{Float64}(undef, observation_samples*2)
-        return new(prob, initial_state, init_observation, dt, 0.0, false, 0.0, 
-                   smax, u_pmax, observation_samples, 100.0, reward_func, action_num)
+        init_observation = Vector{T}(undef, observation_samples*2)
+        return new{T}(prob, initial_state, init_observation, T(dt), T(0.0), false, T(0.0), 
+                   T(smax), T(u_pmax), observation_samples, T(100.0), reward_func, action_num)
     end
 end
 

@@ -1,95 +1,108 @@
-# using FFTW
-# using DifferentialEquations
-# # using ProgressLogging
-# using LinearAlgebra
-# using LoopVectorization
-
-
-Base.@kwdef mutable struct RDEParam
-    N::Int = 256             # Number of spatial points
-    L::Float64 = 2π          # Domain length
-    ν_1::Float64 = 0.1       # Viscosity coefficient
-    ν_2::Float64 = 0.1
-    u_c::Float64 = 1.1       # Parameter in ω(u)
-    α::Float64 = 0.3         # Parameter in ω(u)
-    q_0::Float64 = 1.0       # Source term coefficient
-    u_0::Float64 = 0.0       # Parameter in ξ(u, u_0)
-    n::Int = 1               # Exponent in ξ(u, u_0)
-    k_param::Float64 = 5.0   # Parameter in β(u, s)
-    u_p::Float64 = 0.5       # Parameter in β(u, s)
-    s::Float64 = 3.5         # Parameter in β(u, s)
-    ϵ::Float64 = 0.15        # Small parameter in ξ(u)
-    tmax::Float64 = 50.0     # Maximum simulation time
-    x0::Float64 = 1          # Initial position
-    saveframes::Int64 = 75    # Number of time steps to 
+mutable struct RDEParam{T<:AbstractFloat}
+    N::Int               # Number of spatial points
+    L::T              # Domain length
+    ν_1::T           # Viscosity coefficient
+    ν_2::T
+    u_c::T            # Parameter in ω(u)
+    α::T            # Parameter in ω(u)
+    q_0::T            # Source term coefficient
+    u_0::T            # Parameter in ξ(u, u_0)
+    n::Int                 # Exponent in ξ(u, u_0)
+    k_param::T        # Parameter in β(u, s)
+    u_p::T            # Parameter in β(u, s)
+    s::T              # Parameter in β(u, s)
+    ϵ::T             # Small parameter in ξ(u)
+    tmax::T          # Maximum simulation time
+    x0::T             # Initial position
+    saveframes::Int       # Number of time steps to save
+    function RDEParam(T::Type=Float64;
+        N=256,
+        L=2π,
+        ν_1=0.1,
+        ν_2=0.1, 
+        u_c=1.1,
+        α=0.3,
+        q_0=1.0,
+        u_0=0.0,
+        n=1,
+        k_param=5.0,
+        u_p=0.5,
+        s=3.5,
+        ϵ=0.15,
+        tmax=26.0,
+        x0=1.0,
+        saveframes=75)
+        new{T}(N, T(L), T(ν_1), T(ν_2), T(u_c), T(α), T(q_0), T(u_0), n, T(k_param), T(u_p), T(s), T(ϵ), T(tmax), T(x0), saveframes)
+    end
 end
 Base.length(params::RDEParam) = 1
+
 # Define the RDEProblem structure with default values and explanations
-mutable struct RDECache
-    u_hat::Vector{ComplexF64}      # Complex array of size N÷2+1
-    u_x_hat::Vector{ComplexF64}    # Complex array of size N÷2+1
-    u_x::Vector{Float64}           # Real array of size N
-    u_xx_hat::Vector{ComplexF64}   # Complex array of size N÷2+1
-    u_xx::Vector{Float64}          # Real array of size N
+mutable struct RDECache{T<:AbstractFloat}
+    u_hat::Vector{Complex{T}}      # Complex array of size N÷2+1
+    u_x_hat::Vector{Complex{T}}    # Complex array of size N÷2+1
+    u_x::Vector{T}           # Real array of size N
+    u_xx_hat::Vector{Complex{T}}   # Complex array of size N÷2+1
+    u_xx::Vector{T}          # Real array of size N
 
-    λ_hat::Vector{ComplexF64}      # Complex array of size N÷2+1
-    λ_xx_hat::Vector{ComplexF64}   # Complex array of size N÷2+1
-    λ_xx::Vector{Float64}          # Real array of size N
+    λ_hat::Vector{Complex{T}}      # Complex array of size N÷2+1
+    λ_xx_hat::Vector{Complex{T}}   # Complex array of size N÷2+1
+    λ_xx::Vector{T}          # Real array of size N
 
-    ωu::Vector{Float64}            # Real array of size N
-    ξu::Vector{Float64}            # Real array of size N
-    βu::Vector{Float64}            # Real array of size N
+    ωu::Vector{T}            # Real array of size N
+    ξu::Vector{T}            # Real array of size N
+    βu::Vector{T}            # Real array of size N
 
-    function RDECache(N::Int)
+    function RDECache(N::Int, T::Type{<:AbstractFloat}=Float64)
         N_complex = div(N, 2) + 1          # Size for complex arrays in rfft
-        u_hat = Vector{ComplexF64}(undef, N_complex)
-        u_x_hat = Vector{ComplexF64}(undef, N_complex)
-        u_xx_hat = Vector{ComplexF64}(undef, N_complex)
-        u_x = Vector{Float64}(undef, N)
-        u_xx = Vector{Float64}(undef, N)
+        u_hat = Vector{Complex{T}}(undef, N_complex)
+        u_x_hat = Vector{Complex{T}}(undef, N_complex)
+        u_xx_hat = Vector{Complex{T}}(undef, N_complex)
+        u_x = Vector{T}(undef, N)
+        u_xx = Vector{T}(undef, N)
 
-        λ_hat = Vector{ComplexF64}(undef, N_complex)
-        λ_xx_hat = Vector{ComplexF64}(undef, N_complex)
-        λ_xx = Vector{Float64}(undef, N)
+        λ_hat = Vector{Complex{T}}(undef, N_complex)
+        λ_xx_hat = Vector{Complex{T}}(undef, N_complex)
+        λ_xx = Vector{T}(undef, N)
 
-        ωu = Vector{Float64}(undef, N)
-        ξu = Vector{Float64}(undef, N)
-        βu = Vector{Float64}(undef, N)
-        return new(u_hat, u_x_hat, u_x, u_xx_hat, u_xx, λ_hat, λ_xx_hat, λ_xx, ωu, ξu, βu)
+        ωu = Vector{T}(undef, N)
+        ξu = Vector{T}(undef, N)
+        βu = Vector{T}(undef, N)
+        return new{T}(u_hat, u_x_hat, u_x, u_xx_hat, u_xx, λ_hat, λ_xx_hat, λ_xx, ωu, ξu, βu)
     end
 end
 
-mutable struct RDEProblem
+mutable struct RDEProblem{T<:AbstractFloat}
     # Parameters with defaults and explanations
-    params::RDEParam
+    params::RDEParam{T}
     # Precomputed variables (initialized in init!)
-    dx::Float64              # Spatial resolution
-    x::Vector{Float64}       # Spatial grid
-    k::Vector{Float64}       # Wavenumbers
-    ik::Vector{ComplexF64}   # Spectral derivative operator (i*k)
-    k2::Vector{Float64}      # Square of wavenumbers for Laplacian
-    u0::Vector{Float64}      # Initial condition for u(x, 0)
+    dx::T              # Spatial resolution
+    x::Vector{T}       # Spatial grid
+    k::Vector{T}       # Wavenumbers
+    ik::Vector{Complex{T}}   # Spectral derivative operator (i*k)
+    k2::Vector{T}      # Square of wavenumbers for Laplacian
+    u0::Vector{T}      # Initial condition for u(x, 0)
     u_init::Function
-    λ0::Vector{Float64}      # Initial condition for λ(x, 0)
+    λ0::Vector{T}      # Initial condition for λ(x, 0)
     λ_init::Function
     sol::Union{Nothing,ODESolution}  # Solution (initially nothing)
-    dealiasing::Vector{Float64}
-    cache::RDECache
-    fft_plan::FFTW.rFFTWPlan{Float64}
+    dealiasing::Vector{T}
+    cache::RDECache{T}
+    fft_plan::FFTW.rFFTWPlan{T}
     ifft_plan::FFTW.ScaledPlan
 
     # Constructor accepting keyword arguments to override defaults
-    function RDEProblem(params::RDEParam; 
+    function RDEProblem(params::RDEParam, T::Type{<:AbstractFloat}=Float64;
             u_init= (x, x0) -> (3 / 2) * (sech(x - x0)) ^ (20),
             λ_init= x->0.5, dealias=true)
-        prob = new()
+        prob = new{T}()
         prob.params = params
         prob.dx = prob.params.L / prob.params.N
         prob.x = prob.dx * (0:prob.params.N-1)
         prob.ik, prob.k2 = create_spectral_derivative_arrays(params.N)
         prob.dealiasing = create_dealiasing_vector(params.N)
         if !dealias
-            prob.dealiasing = ones(Float64, length(prob.dealiasing))
+            prob.dealiasing = ones(T, length(prob.dealiasing))
         end
 
         prob.u_init = u_init
@@ -98,7 +111,7 @@ mutable struct RDEProblem
     
         prob.λ0 = λ_init.(prob.x)
         prob.sol = nothing
-        prob.cache = RDECache(params.N)
+        prob.cache = RDECache(params.N, T)
         prob.fft_plan = plan_rfft(prob.u0; flags=FFTW.MEASURE)
         prob.ifft_plan = plan_irfft(prob.cache.u_hat, length(prob.u0); flags=FFTW.MEASURE)
         set_init_state!(prob) #as u0 may have been wiped while creating fft plans
