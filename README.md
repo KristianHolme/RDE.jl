@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-This package provides a solver for the rotating detonation engine (RDE) model equations presented in SOURCES:
+This package provides a solver for the rotating detonation engine (RDE) model equations presented in [References](#references):
 
 $u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)$
 
