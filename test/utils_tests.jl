@@ -1,0 +1,1 @@
+@test RDE.periodic_simpsons_rule(zeros(16), 0.5) ≈ 0.0
