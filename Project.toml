@@ -1,0 +1,13 @@
+name = "RDE"
+uuid = "1d57ab14-0807-4ee5-93aa-665821a12dfd"
+authors = ["Kristian Holme"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.6.7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
