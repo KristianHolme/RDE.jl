@@ -9,3 +9,9 @@ end
     mdp = convert(MDP, RDEEnv());
     true
 end
+
+@test begin
+    ConstPolicy = ConstantRDEPolicy();
+    data = run_policy(ConstPolicy, RDEEnv(); tmax = 1.0);
+    data isa PolicyRunData
+end

@@ -1,6 +1,3 @@
-using Makie
-using Observables
-using POMDPs
 # Plot the solution with interactive controls
 function plot_solution(prob::RDEProblem; 
         time_idx = Observable(1),

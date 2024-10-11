@@ -19,22 +19,27 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
     reward_func::Function
     action_num::Int64
 
-    function RDEEnv(T::Type{<:AbstractFloat}=Float64;
+    function RDEEnv{T}(;
         dt = 0.1,
         smax = 5.0,
         u_pmax = 3.0,
         observation_samples::Int64 = 10,
-        params::RDEParam{T} = RDEParam(T),
+        params::RDEParam{T} = RDEParam{T}(),
         reward_func::Function = RDE_reward_energy_balance!,
         action_num::Int64 = 10,
-        kwargs...)
-        prob = RDEProblem(params, T;kwargs...)
+        kwargs...) where T <:AbstractFloat
+
+        prob = RDEProblem{T}(params;kwargs...)
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = Vector{T}(undef, observation_samples*2)
-        return new{T}(prob, initial_state, init_observation, T(dt), T(0.0), false, T(0.0), 
-                   T(smax), T(u_pmax), observation_samples, T(100.0), reward_func, action_num)
+        
+        return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0, 
+                   smax, u_pmax, observation_samples, 100.0, reward_func, action_num)
     end
 end
+
+#default to float32 to be gpu compatible
+RDEEnv(;kwargs...) = RDEEnv{Float64}(;kwargs...) 
 
 function interpolate_state(env::RDEEnv)
     N = env.prob.params.N
@@ -96,8 +101,8 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     env.prob.params.s = action[1]*env.smax #actions between 0 and 1
     env.prob.params.u_p = action[2]*env.u_pmax
 
-    prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
 
+    prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
     sol = DifferentialEquations.solve(prob_ode)
     env.prob.sol = sol
     env.t = sol.t[end]

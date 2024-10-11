@@ -15,29 +15,32 @@ mutable struct RDEParam{T<:AbstractFloat}
     tmax::T          # Maximum simulation time
     x0::T             # Initial position
     saveframes::Int       # Number of time steps to save
-    function RDEParam(T::Type=Float64;
-        N=256,
-        L=2π,
-        ν_1=0.1,
-        ν_2=0.1, 
-        u_c=1.1,
-        α=0.3,
-        q_0=1.0,
-        u_0=0.0,
-        n=1,
-        k_param=5.0,
-        u_p=0.5,
-        s=3.5,
-        ϵ=0.15,
-        tmax=26.0,
-        x0=1.0,
-        saveframes=75)
-        new{T}(N, T(L), T(ν_1), T(ν_2), T(u_c), T(α), T(q_0), T(u_0), n, T(k_param), T(u_p), T(s), T(ϵ), T(tmax), T(x0), saveframes)
-    end
 end
 Base.length(params::RDEParam) = 1
 
-# Define the RDEProblem structure with default values and explanations
+function RDEParam{T}(;
+    N=256,
+    L=2π,
+    ν_1=0.1,
+    ν_2=0.1,
+    u_c=1.1,
+    α=0.3,
+    q_0=1.0,
+    u_0=0.0,
+    n=1,
+    k_param=5.0,
+    u_p=0.5,
+    s=3.5,
+    ϵ=0.15,
+    tmax=26.0,
+    x0=1.0,
+    saveframes=75) where {T<:AbstractFloat}
+    RDEParam{T}(N, L, ν_1, ν_2, u_c, α, q_0, u_0, n, k_param, u_p, s, ϵ, tmax, x0, saveframes)
+end
+
+RDEParam(;kwargs...) = RDEParam{Float64}(;kwargs...)
+
+"""Cache for computed values in the solver. To avoid allocations during simulation."""
 mutable struct RDECache{T<:AbstractFloat}
     u_hat::Vector{Complex{T}}      # Complex array of size N÷2+1
     u_x_hat::Vector{Complex{T}}    # Complex array of size N÷2+1
@@ -53,7 +56,7 @@ mutable struct RDECache{T<:AbstractFloat}
     ξu::Vector{T}            # Real array of size N
     βu::Vector{T}            # Real array of size N
 
-    function RDECache(N::Int, T::Type{<:AbstractFloat}=Float64)
+    function RDECache{T}(N::Int) where {T<:AbstractFloat}
         N_complex = div(N, 2) + 1          # Size for complex arrays in rfft
         u_hat = Vector{Complex{T}}(undef, N_complex)
         u_x_hat = Vector{Complex{T}}(undef, N_complex)
@@ -92,15 +95,16 @@ mutable struct RDEProblem{T<:AbstractFloat}
     ifft_plan::FFTW.ScaledPlan
 
     # Constructor accepting keyword arguments to override defaults
-    function RDEProblem(params::RDEParam, T::Type{<:AbstractFloat}=Float64;
-            u_init= (x, x0) -> (3 / 2) * (sech(x - x0)) ^ (20),
-            λ_init= x->0.5, dealias=true)
+    function RDEProblem{T}(params::RDEParam{T};
+        u_init= (x, x0) -> (3 / 2) * (sech(x - x0))^(20),
+        λ_init=x -> 0.5, dealias=true) where {T<:AbstractFloat}
+
         prob = new{T}()
         prob.params = params
         prob.dx = prob.params.L / prob.params.N
         prob.x = prob.dx * (0:prob.params.N-1)
         prob.ik, prob.k2 = create_spectral_derivative_arrays(params.N)
-        prob.dealiasing = create_dealiasing_vector(params.N)
+        prob.dealiasing = create_dealiasing_vector(params.N, T)
         if !dealias
             prob.dealiasing = ones(T, length(prob.dealiasing))
         end
@@ -108,10 +112,10 @@ mutable struct RDEProblem{T<:AbstractFloat}
         prob.u_init = u_init
         prob.λ_init = λ_init
         set_init_state!(prob)
-    
+
         prob.λ0 = λ_init.(prob.x)
         prob.sol = nothing
-        prob.cache = RDECache(params.N, T)
+        prob.cache = RDECache{T}(params.N)
         prob.fft_plan = plan_rfft(prob.u0; flags=FFTW.MEASURE)
         prob.ifft_plan = plan_irfft(prob.cache.u_hat, length(prob.u0); flags=FFTW.MEASURE)
         set_init_state!(prob) #as u0 may have been wiped while creating fft plans
@@ -119,20 +123,22 @@ mutable struct RDEProblem{T<:AbstractFloat}
     end
 end
 
-function create_dealiasing_vector(N::Int)
+RDEProblem(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEProblem{T}(params; kwargs...)
+
+function create_dealiasing_vector(N::Int, T::Type=Float64)
     N_complex = div(N, 2) + 1
     k = collect(0:N_complex-1)
     k_cutoff = div(N, 3)
 
     # Construct the dealiasing vector using broadcasting
-    dealiasing = @. ifelse(k <= k_cutoff, 1.0, 0.0)
+    dealiasing = @. ifelse(k <= k_cutoff, one(T), zero(T))
 
     return dealiasing
 end
 
-function create_spectral_derivative_arrays(N::Int)
+function create_spectral_derivative_arrays(N::Int, T::Type=Float64)
     N_complex = div(N, 2) + 1
-    k = collect(0:N_complex-1)
+    k = collect(T, 0:N_complex-1)
     ik = 1im .* k
     k2 = k .^ 2
     return ik, k2
@@ -143,9 +149,9 @@ function set_init_state!(prob::RDEProblem)
     prob.λ0 = prob.λ_init.(prob.x)
 end
 
-ω(u, u_c, α) = exp((u-u_c)/α)
-ξ(u, u_0, n) = (u_0 - u)*u^n
-β(u, s, u_p, k) = s*u_p/(1 + exp(k * (u - u_p)))
+ω(u, u_c, α) = exp((u - u_c) / α)
+ξ(u, u_0, n) = (u_0 - u) * u^n
+β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
 # β(u, s, u_p, k) = s/(1 + exp(k * (u - u_p)))
 
 
@@ -197,7 +203,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     @. u_xx_hat = -k2 * u_hat * dealiasing
 
     @. λ_xx_hat = -k2 * λ_hat * dealiasing
-    
+
     # Inverse FFT to get derivatives in physical space (in-place)
     mul!(u_x, prob.ifft_plan, u_x_hat)
     mul!(u_xx, prob.ifft_plan, u_xx_hat)
@@ -213,7 +219,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
     # RHS for λ_t
-    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2*λ_xx
+    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
 end
 
 
@@ -221,7 +227,7 @@ end
 # Solve the PDE with an optional solver argument
 function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
     uλ_0 = vcat(prob.u0, prob.λ0)
-    tspan = (0.0, prob.params.tmax)
+    tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
 
     saveat = prob.params.tmax / prob.params.saveframes
 
@@ -237,7 +243,7 @@ end
 Calculate
 Ė₍domain₎ = ∫₀ᴸ (q(1-λ)ω(u) - ϵξ(u))dx
 """
-function energy_balance(u::Vector{Float64}, λ::Vector{Float64}, params::RDEParam)
+function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T <: Real
     q_0 = params.q_0
     u_c = params.u_c
     α = params.α
@@ -246,9 +252,10 @@ function energy_balance(u::Vector{Float64}, λ::Vector{Float64}, params::RDEPara
     n = params.n
     L = params.L
     N = params.N
-    dx = L/N
+    dx = L / N
+    
 
-    integrand = q_0*(1 .- λ) .* ω.(u, u_c, α) .- ϵ*ξ.(u, u_0, n)
+    integrand = q_0 * (1 .- λ) .* ω.(u, u_c, α) .- ϵ * ξ.(u, u_0, n)
 
     # trapezoidal_rule_integral = dx * sum(integrand)
 
@@ -257,14 +264,14 @@ function energy_balance(u::Vector{Float64}, λ::Vector{Float64}, params::RDEPara
     return simpsons_rule_integral
 end
 
-function periodic_simpsons_rule(u::Vector{T}, dx::T) where T <: Real
-    dx/3*sum((2*u[1:2:end] + 4*u[2:2:end]))
+function periodic_simpsons_rule(u::Vector{T}, dx::T) where {T<:Real}
+    dx / 3 * sum((2 * u[1:2:end] + 4 * u[2:2:end]))
 end
 
-function energy_balance(uλ::Vector{Float64}, params::RDEParam)
+function energy_balance(uλ::Vector{T}, params::RDEParam) where T <: Real
     u, λ = split_sol(uλ)
     energy_balance(u, λ, params)
 end
-function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where T <: Real
+function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T<:Real}
     [energy_balance(uλ, params) for uλ in uλs]
 end
