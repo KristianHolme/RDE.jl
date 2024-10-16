@@ -1,24 +1,24 @@
 module RDE
 
 # Write your package code here.
+    using CommonRLInterface
     using DifferentialEquations
     using FFTW
+    using Interpolations
     using LinearAlgebra
     using LoopVectorization
     using Makie
     using Observables
     using POMDPs
     using POMDPTools
-    using CommonRLInterface
-    using Interpolations
     using ProgressMeter
-
+    
     using PrecompileTools
-
     
     export RDEParam, RDEProblem, RDEEnv, solve_pde!
     export ConstantRDEPolicy, run_policy, PolicyRunData
     export plot_solution, plot_policy, plot_policy_data, animate_policy, animate_RDE
+    export interactive_RDE_control
     
 
 

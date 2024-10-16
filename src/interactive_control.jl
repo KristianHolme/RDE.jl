@@ -35,6 +35,19 @@ function interactive_RDE_control(;kwargs...)
     on(time_step) do val
         env.dt = val
     end
+    slider_s = Slider(label_area[2,1], range = 0:0.005:1, startvalue = control_s[])
+    on(slider_s.value) do val
+        control_s[] = val
+    end
+    slider_u_p = Slider(label_area[2,2], range = 0:0.005:1, startvalue = control_u_p[])
+    on(slider_u_p.value) do val
+        control_u_p[] = val
+    end
+    slider_dt = Slider(label_area[2,3], range = 0:0.005:1, startvalue = time_step[])
+    on(slider_dt.value) do val
+        time_step[] = val
+    end
+
     time = Observable(env.t)
     function update_observables!()
         u_data[] = env.state[1:N]
@@ -80,10 +93,12 @@ function interactive_RDE_control(;kwargs...)
                     if key == Keyboard.up
                         # Increase time step on arrow up
                         time_step[] += get_timestep_scale(time_step.val)
+                        set_close_to!(slider_dt, time_step[])
 
                     elseif key == Keyboard.down
                         # Decrease time step on arrow down
                         time_step[] -= get_timestep_scale(time_step.val)
+                        set_close_to!(slider_dt, time_step[])
 
                     elseif key == Keyboard.left
                         println("Left arrow held down")
@@ -96,21 +111,27 @@ function interactive_RDE_control(;kwargs...)
 
                     elseif key == Keyboard.w
                         control_s[] += get_timestep_scale(control_s.val)
+                        set_close_to!(slider_s, control_s[])
 
                     elseif key == Keyboard.s
                         control_s[] -= get_timestep_scale(control_s.val)
+                        set_close_to!(slider_s, control_s[])
 
                     elseif key == Keyboard.e
                         control_u_p[] += get_timestep_scale(control_u_p.val)
+                        set_close_to!(slider_u_p, control_u_p[])
 
                     elseif key == Keyboard.d
                         control_u_p[] -= get_timestep_scale(control_u_p.val)
+                        set_close_to!(slider_u_p, control_u_p[])
 
                     elseif key == Keyboard.r
                         reset!(env)
                         update_observables!()
                         control_s[] = s_start/env.smax
                         control_u_p[] = u_p_start/env.u_pmax
+                        set_close_to!(slider_s, control_s[])
+                        set_close_to!(slider_u_p, control_u_p[])
                         energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
 
                     end

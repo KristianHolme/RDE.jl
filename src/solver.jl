@@ -103,8 +103,8 @@ mutable struct RDEProblem{T<:AbstractFloat}
         prob.params = params
         prob.dx = prob.params.L / prob.params.N
         prob.x = prob.dx * (0:prob.params.N-1)
-        prob.ik, prob.k2 = create_spectral_derivative_arrays(params.N)
-        prob.dealiasing = create_dealiasing_vector(params.N, T)
+        prob.ik, prob.k2 = create_spectral_derivative_arrays(params)
+        prob.dealiasing = create_dealiasing_vector(params)
         if !dealias
             prob.dealiasing = ones(T, length(prob.dealiasing))
         end
@@ -125,7 +125,8 @@ end
 
 RDEProblem(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEProblem{T}(params; kwargs...)
 
-function create_dealiasing_vector(N::Int, T::Type=Float64)
+function create_dealiasing_vector(params::RDEParam{T}) where {T<:AbstractFloat}
+    N = params.N
     N_complex = div(N, 2) + 1
     k = collect(0:N_complex-1)
     k_cutoff = div(N, 3)
@@ -136,9 +137,11 @@ function create_dealiasing_vector(N::Int, T::Type=Float64)
     return dealiasing
 end
 
-function create_spectral_derivative_arrays(N::Int, T::Type=Float64)
+function create_spectral_derivative_arrays(params::RDEParam{T}) where {T<:AbstractFloat}
+    N = params.N
+    L = params.L
     N_complex = div(N, 2) + 1
-    k = collect(T, 0:N_complex-1)
+    k = collect(T, 0:N_complex-1) .* 2π / L
     ik = 1im .* k
     k2 = k .^ 2
     return ik, k2
@@ -150,9 +153,8 @@ function set_init_state!(prob::RDEProblem)
 end
 
 ω(u, u_c, α) = exp((u - u_c) / α)
-ξ(u, u_0, n) = (u_0 - u) * u^n
+ξ(u, u_0, n) = (u_0 - u) * u^n 
 β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
-# β(u, s, u_p, k) = s/(1 + exp(k * (u - u_p)))
 
 
 # RHS function for the ODE solver using in-place operations
@@ -234,7 +236,9 @@ function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
     sol = DifferentialEquations.solve(prob_ode, solver; saveat=saveat, kwargs...)
-
+    if sol.retcode != :Success
+        @warn "failed to solve PDE"
+    end
     # Store the solution in the struct
     prob.sol = sol
 end
@@ -275,3 +279,21 @@ end
 function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T<:Real}
     [energy_balance(uλ, params) for uλ in uλs]
 end
+
+function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T <: Real
+    if length(uλ) != params.N
+        @assert length(uλ) == 2 * params.N
+        u,  = split_sol(uλ)
+    else
+        u = uλ
+    end
+    L = params.L
+    dx = L / params.N
+    mean_pressure = periodic_simpsons_rule(u, dx)/L
+    return mean_pressure
+end
+
+function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T <: Real
+    [chamber_pressure(uλ, params) for uλ in uλs]
+end
+
