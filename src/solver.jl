@@ -75,6 +75,8 @@ mutable struct RDECache{T<:AbstractFloat}
     end
 end
 
+RDECache(N::Int) = RDECache{Float64}(N)
+
 mutable struct RDEProblem{T<:AbstractFloat}
     # Parameters with defaults and explanations
     params::RDEParam{T}
@@ -93,11 +95,14 @@ mutable struct RDEProblem{T<:AbstractFloat}
     cache::RDECache{T}
     fft_plan::FFTW.rFFTWPlan{T}
     ifft_plan::FFTW.ScaledPlan
+    calc_derivatives::Function
 
     # Constructor accepting keyword arguments to override defaults
     function RDEProblem{T}(params::RDEParam{T};
         u_init= (x, x0) -> (3 / 2) * (sech(x - x0))^(20),
-        λ_init=x -> 0.5, dealias=true) where {T<:AbstractFloat}
+        λ_init=x -> 0.5,
+        dealias=true,
+        method=:pseudospectral) where {T<:AbstractFloat}
 
         prob = new{T}()
         prob.params = params
@@ -119,6 +124,14 @@ mutable struct RDEProblem{T<:AbstractFloat}
         prob.fft_plan = plan_rfft(prob.u0; flags=FFTW.MEASURE)
         prob.ifft_plan = plan_irfft(prob.cache.u_hat, length(prob.u0); flags=FFTW.MEASURE)
         set_init_state!(prob) #as u0 may have been wiped while creating fft plans
+        
+        if method == :pseudospectral
+            prob.calc_derivatives = pseudospectral_derivatives!
+        elseif method == :fd
+            prob.calc_derivatives = fd_derivatives!
+        else
+            error("method must be :pseudospectral or :fd")
+        end
         return prob
     end
 end
@@ -171,9 +184,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     k_param = prob.params.k_param
     u_p = prob.params.u_p
     s = prob.params.s
-    ik = prob.ik             # Complex array of size N÷2+1
-    k2 = prob.k2             # Real array of size N÷2+1
-    dealiasing = prob.dealiasing  # Real array of size N÷2+1
+    
     cache = prob.cache       # Preallocated arrays
 
     # Extract physical components
@@ -182,7 +193,32 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     du = @view duλ[1:N]
     dλ = @view duλ[N+1:end]
 
+    prob.calc_derivatives(u, λ, prob)
 
+    u_x = cache.u_x
+    u_xx = cache.u_xx
+    λ_xx = cache.λ_xx
+    ωu = cache.ωu                  # Real array of size N
+    ξu = cache.ξu                  # Real array of size N
+    βu = cache.βu                  # Real array of size N
+
+    # Compute nonlinear terms using fused broadcasting
+    @turbo @. ωu = ω(u, u_c, α)
+    @turbo @. ξu = ξ(u, u_0, n)
+    @turbo @. βu = β(u, s, u_p, k_param)
+
+    # RHS for u_t
+    @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+
+    # RHS for λ_t
+    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
+end
+
+function pseudospectral_derivatives!(u::T, λ::T, prob::RDEProblem) where T <:AbstractArray
+    cache = prob.cache
+    ik = prob.ik             # Complex array of size N÷2+1
+    k2 = prob.k2             # Real array of size N÷2+1
+    dealiasing = prob.dealiasing  # Real array of size N÷2+1
     # Preallocated arrays
     u_hat = cache.u_hat            # Complex array of size N÷2+1
     u_x_hat = cache.u_x_hat        # Complex array of size N÷2+1
@@ -192,10 +228,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     λ_hat = cache.λ_hat            # Complex array of size N÷2+1
     λ_xx_hat = cache.λ_xx_hat      # Complex array of size N÷2+1
     λ_xx = cache.λ_xx
-    ωu = cache.ωu                  # Real array of size N
-    ξu = cache.ξu                  # Real array of size N
-    βu = cache.βu                  # Real array of size N
-
+    
     # Transform to spectral space (in-place)
     mul!(u_hat, prob.fft_plan, u)  # Apply fft_plan to u, store in u_hat
     mul!(λ_hat, prob.fft_plan, λ)
@@ -211,19 +244,44 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     mul!(u_xx, prob.ifft_plan, u_xx_hat)
 
     mul!(λ_xx, prob.ifft_plan, λ_xx_hat)
-
-    # Compute nonlinear terms using fused broadcasting
-    @turbo @. ωu = ω(u, u_c, α)
-    @turbo @. ξu = ξ(u, u_0, n)
-    @turbo @. βu = β(u, s, u_p, k_param)
-
-    # RHS for u_t
-    @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
-
-    # RHS for λ_t
-    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
+    nothing
 end
 
+function fd_derivatives!(u::T, λ::T, prob::RDEProblem) where T <: AbstractArray
+    cache = prob.cache
+    dx = prob.dx
+    N = prob.params.N
+    inv_2dx = 1 / (2 * dx)
+    inv_dx2 = 1 / dx^2
+    
+    # Preallocated arrays
+    u_x = cache.u_x                # Real array of size N
+    u_xx = cache.u_xx              # Real array of size N
+    λ_xx = cache.λ_xx
+    
+    # Compute u_x using central differences with periodic boundary conditions
+    u_x[1] = (u[2] - u[N]) * inv_2dx
+    @turbo for i in 2:N-1
+        u_x[i] = (u[i+1] - u[i-1]) * inv_2dx
+    end
+    u_x[N] = (u[1] - u[N-1]) * inv_2dx
+    
+    # Compute u_xx using central differences with periodic boundary conditions
+    u_xx[1] = (u[2] - 2 * u[1] + u[N]) * inv_dx2
+    @turbo for i in 2:N-1
+        u_xx[i] = (u[i+1] - 2 * u[i] + u[i-1]) * inv_dx2
+    end
+    u_xx[N] = (u[1] - 2 * u[N] + u[N-1]) * inv_dx2
+    
+    # Compute λ_xx using central differences with periodic boundary conditions
+    λ_xx[1] = (λ[2] - 2 * λ[1] + λ[N]) * inv_dx2
+    @turbo for i in 2:N-1
+        λ_xx[i] = (λ[i+1] - 2 * λ[i] + λ[i-1]) * inv_dx2
+    end
+    λ_xx[N] = (λ[1] - 2 * λ[N] + λ[N-1]) * inv_dx2
+
+    nothing
+end
 
 
 # Solve the PDE with an optional solver argument
