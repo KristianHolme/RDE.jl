@@ -1,3 +1,4 @@
+using POMDPs
 @test begin
     params = RDEParam(;N=16, tmax = 0.01);
     prob = RDEProblem(params);
@@ -5,13 +6,13 @@
 end
 
 @test begin
-    import POMDPs: MDP
-    mdp = convert(MDP, RDEEnv());
+    mdp = convert(MDP, RDEEnv())
+    pomdp = convert(POMDP, RDEEnv())
     true
 end
 
 @test begin
     ConstPolicy = ConstantRDEPolicy();
-    data = run_policy(ConstPolicy, RDEEnv(); tmax = 1.0);
+    data = run_policy(ConstPolicy, RDEEnv(); tmax = 0.1);
     data isa PolicyRunData
 end

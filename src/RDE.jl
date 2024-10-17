@@ -22,23 +22,22 @@ module RDE
     
 
 
+    include("structs.jl")
+    include("utils.jl")
     include("solver.jl")
     include("RLenv.jl")
     include("plotting.jl")
     include("animations.jl")
     include("interactive_control.jl")
-    include("utils.jl")
 
 
     @compile_workload begin
         try
             #simulate tiny case for a short time
-            prob = RDEProblem(RDEParam(;N=32, tmax = 0.01));
-            solve_pde!(prob, progress=true);
+            prob = RDEProblem(RDEParam(;N=8, tmax = 0.01));
+            solve_pde!(prob);
         catch e
             @warn "Precompilation failure: $e"
         end
     end
-    
-
 end
