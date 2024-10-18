@@ -1,3 +1,5 @@
+using RDE
+using GLMakie
 # Create an instance of RDEProblem with custom parameters if desired
 params = RDEParam(;N=128, tmax=26.0)
 rde_prob = RDEProblem(params);
