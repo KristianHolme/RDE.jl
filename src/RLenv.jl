@@ -20,16 +20,16 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
     action_num::Int64
 
     function RDEEnv{T}(;
-        dt = 0.1,
+        dt = 0.5,
         smax = 5.0,
         u_pmax = 3.0,
-        observation_samples::Int64 = 10,
+        observation_samples::Int64 = 9,
         params::RDEParam{T} = RDEParam{T}(),
         reward_func::Function = RDE_reward_energy_balance!,
         action_num::Int64 = 10,
         kwargs...) where T <:AbstractFloat
 
-        prob = RDEProblem{T}(params;kwargs...)
+        prob = RDEProblem(params; kwargs...)
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = Vector{T}(undef, observation_samples*2)
         

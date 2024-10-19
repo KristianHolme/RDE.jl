@@ -10,8 +10,8 @@ end
     success = true
     for T in [Float32, Float64]
         rde = RDEProblem(RDEParam{T}(;N=128, tmax = 5.0));
-        fft_plan = rde.fft_plan
-        ifft_plan = rde.ifft_plan
+        fft_plan = rde.cache.fft_plan
+        ifft_plan = rde.cache.ifft_plan
         u0 = rde.u0
         u0_hat = fft_plan*u0
         u0_hat_hat = ifft_plan*u0_hat

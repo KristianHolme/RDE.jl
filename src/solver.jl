@@ -27,7 +27,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     du = @view duλ[1:N]
     dλ = @view duλ[N+1:end]
 
-    prob.calc_derivatives(u, λ, prob)
+    calc_derivatives!(u, λ, prob.cache)
 
     u_x = cache.u_x
     u_xx = cache.u_xx
@@ -48,11 +48,10 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
 end
 
-function pseudospectral_derivatives!(u::T, λ::T, prob::RDEProblem) where T <:AbstractArray
-    cache = prob.cache
-    ik = prob.ik             # Complex array of size N÷2+1
-    k2 = prob.k2             # Real array of size N÷2+1
-    dealiasing = prob.dealiasing  # Real array of size N÷2+1
+function calc_derivatives!(u::T, λ::T, cache::PseudospectralRDECache) where T <:AbstractArray
+    ik = cache.ik             # Complex array of size N÷2+1
+    k2 = cache.k2             # Real array of size N÷2+1
+    dealias_filter = cache.dealias_filter  # Real array of size N÷2+1
     # Preallocated arrays
     u_hat = cache.u_hat            # Complex array of size N÷2+1
     u_x_hat = cache.u_x_hat        # Complex array of size N÷2+1
@@ -64,33 +63,32 @@ function pseudospectral_derivatives!(u::T, λ::T, prob::RDEProblem) where T <:Ab
     λ_xx = cache.λ_xx
     
     # Transform to spectral space (in-place)
-    mul!(u_hat, prob.fft_plan, u)  # Apply fft_plan to u, store in u_hat
-    mul!(λ_hat, prob.fft_plan, λ)
+    mul!(u_hat, cache.fft_plan, u)  # Apply fft_plan to u, store in u_hat
+    mul!(λ_hat, cache.fft_plan, λ)
 
     # Compute derivatives in spectral space (with dealiasing)
-    @. u_x_hat = ik * u_hat * dealiasing
-    @. u_xx_hat = -k2 * u_hat * dealiasing
+    @. u_x_hat = ik * u_hat * dealias_filter
+    @. u_xx_hat = -k2 * u_hat * dealias_filter
 
-    @. λ_xx_hat = -k2 * λ_hat * dealiasing
+    @. λ_xx_hat = -k2 * λ_hat * dealias_filter
 
     # Inverse FFT to get derivatives in physical space (in-place)
-    mul!(u_x, prob.ifft_plan, u_x_hat)
-    mul!(u_xx, prob.ifft_plan, u_xx_hat)
+    mul!(u_x, cache.ifft_plan, u_x_hat)
+    mul!(u_xx, cache.ifft_plan, u_xx_hat)
 
-    mul!(λ_xx, prob.ifft_plan, λ_xx_hat)
+    mul!(λ_xx, cache.ifft_plan, λ_xx_hat)
     nothing
 end
 
-function fd_derivatives!(u::T, λ::T, prob::RDEProblem) where T <: AbstractArray
-    cache = prob.cache
-    dx = prob.dx
-    N = prob.params.N
+function calc_derivatives!(u::T, λ::T, cache::FDRDECache) where T <: AbstractArray
+    dx = cache.dx
+    N = cache.N
     inv_2dx = 1 / (2 * dx)
     inv_dx2 = 1 / dx^2
     
     # Preallocated arrays
-    u_x = cache.u_x                # Real array of size N
-    u_xx = cache.u_xx              # Real array of size N
+    u_x = cache.u_x               
+    u_xx = cache.u_xx              
     λ_xx = cache.λ_xx
     
     # Compute u_x using central differences with periodic boundary conditions
@@ -135,57 +133,5 @@ function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
     prob.sol = sol
 end
 
-"""
-Calculate
-Ė₍domain₎ = ∫₀ᴸ (q(1-λ)ω(u) - ϵξ(u))dx
-"""
-function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T <: Real
-    q_0 = params.q_0
-    u_c = params.u_c
-    α = params.α
-    ϵ = params.ϵ
-    u_0 = params.u_0
-    n = params.n
-    L = params.L
-    N = params.N
-    dx = L / N
-    
 
-    integrand = q_0 * (1 .- λ) .* ω.(u, u_c, α) .- ϵ * ξ.(u, u_0, n)
-
-    # trapezoidal_rule_integral = dx * sum(integrand)
-
-    simpsons_rule_integral = periodic_simpsons_rule(integrand, dx)
-
-    return simpsons_rule_integral
-end
-
-function periodic_simpsons_rule(u::Vector{T}, dx::T) where {T<:Real}
-    dx / 3 * sum((2 * u[1:2:end] + 4 * u[2:2:end]))
-end
-
-function energy_balance(uλ::Vector{T}, params::RDEParam) where T <: Real
-    u, λ = split_sol(uλ)
-    energy_balance(u, λ, params)
-end
-function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T<:Real}
-    [energy_balance(uλ, params) for uλ in uλs]
-end
-
-function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T <: Real
-    if length(uλ) != params.N
-        @assert length(uλ) == 2 * params.N
-        u,  = split_sol(uλ)
-    else
-        u = uλ
-    end
-    L = params.L
-    dx = L / params.N
-    mean_pressure = periodic_simpsons_rule(u, dx)/L
-    return mean_pressure
-end
-
-function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T <: Real
-    [chamber_pressure(uλ, params) for uλ in uλs]
-end
 

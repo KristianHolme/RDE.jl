@@ -17,7 +17,8 @@ module RDE
     
     export RDEParam, RDEProblem, RDEEnv, solve_pde!
     export ConstantRDEPolicy, run_policy, PolicyRunData
-    export plot_solution, plot_policy, plot_policy_data, animate_policy, animate_RDE
+    export plot_solution, plot_policy, plot_policy_data
+    export animate_policy, animate_policy_data, animate_RDE
     export interactive_RDE_control
     
 

@@ -17,3 +17,14 @@ end
     true
 end
 
+@test begin
+    params = RDEParam{Float32}(;N=16)
+    cache = RDE.PseudospectralRDECache{Float32}(params, dealias=true)
+    typeof(cache) == RDE.PseudospectralRDECache{Float32}
+end
+
+@test begin
+    params = RDEParam{Float32}(;N=16)
+    cache = RDE.FDRDECache{Float32}(params, Float32(2π/16.0))
+    typeof(cache) == RDE.FDRDECache{Float32}
+end
