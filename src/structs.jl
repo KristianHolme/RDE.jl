@@ -141,7 +141,7 @@ function RDEProblem(params::RDEParam{T};
     cache = if method == :pseudospectral
         PseudospectralRDECache{T}(params, dealias=dealias)
     elseif method == :fd
-        FDRDECache{T}(params.N, dx)
+        FDRDECache{T}(params, dx)
     else
         throw(ArgumentError("method must be :pseudospectral or :fd"))
     end

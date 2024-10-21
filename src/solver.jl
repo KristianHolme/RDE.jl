@@ -133,5 +133,9 @@ function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
     prob.sol = sol
 end
 
-
-
+function outofdomain(uλ, params, t)
+    u, λ = split_sol(uλ)
+    u_out = any(u .< 0.0)
+    λ_out = any((λ .< 0.0) .| (λ .> 1.0))
+    return u_out || λ_out
+end
