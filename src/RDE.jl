@@ -3,6 +3,7 @@ module RDE
 # Write your package code here.
     using CommonRLInterface
     using DifferentialEquations
+    using DomainSets
     using FFTW
     using Interpolations
     using LinearAlgebra

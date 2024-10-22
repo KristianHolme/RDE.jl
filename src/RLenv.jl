@@ -1,8 +1,7 @@
-using CommonRLInterface
-using Interpolations
+# using CommonRLInterface
+# using Interpolations
 # using IntervalSets
-# using DomainSets
-using POMDPs
+# using POMDPs
 
 mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
     prob::RDEProblem{T}                  # RDE problem
@@ -17,7 +16,7 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
     observation_samples::Int64
     max_state_val::T
     reward_func::Function
-    action_num::Int64
+    α::T #action momentum
 
     function RDEEnv{T}(;
         dt = 0.5,
@@ -59,13 +58,12 @@ function interpolate_state(env::RDEEnv)
 end
 
 # CommonRLInterface.reward(env::RDEEnv) = env.reward
-CommonRLInterface.state(env::RDEEnv) = env.state
+CommonRLInterface.state(env::RDEEnv) = [env.state; env.t]
 CommonRLInterface.terminated(env::RDEEnv) = env.done
-CommonRLInterface.observe(env::RDEEnv) = interpolate_state(env)
+CommonRLInterface.observe(env::RDEEnv) = [interpolate_state(env); env.t]
 
 function CommonRLInterface.actions(env::RDEEnv)
-    single_actions = LinRange(0, 1, env.action_num)
-    collect(Iterators.product(single_actions, single_actions))[:]
+    return [(-1..1) for i in 1:2]
 end
 
 #TODO test that this works
@@ -98,8 +96,16 @@ end
 function CommonRLInterface.act!(env::RDEEnv, action)
     t_span = (env.t, env.t + env.dt)
 
-    env.prob.params.s = action[1]*env.smax #actions between 0 and 1
-    env.prob.params.u_p = action[2]*env.u_pmax
+    s = env.prob.params.s
+    u_p = env.prob.params.u_p
+    c_max = [env.smax, env.u_pmax]
+
+    for (i, c) in enumerate([s, u_p])
+        a = action[i]
+        c_hat = a<0 ? c*(a+1) : c + (c_max[i]-c)*a
+        c = env.α*c + (1-env.α)*c_hat
+    end
+
 
 
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
