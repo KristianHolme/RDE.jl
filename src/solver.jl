@@ -115,6 +115,12 @@ function calc_derivatives!(u::T, λ::T, cache::FDRDECache) where T <: AbstractAr
     nothing
 end
 
+function outofdomain(uλ, params, t)
+    u, λ = split_sol(uλ)
+    u_out = any(u .< 0.0)
+    λ_out = any((λ .< 0.0) .| (λ .> 1.0))
+    return u_out || λ_out
+end
 
 # Solve the PDE with an optional solver argument
 function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
@@ -125,17 +131,10 @@ function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
 
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
-    sol = DifferentialEquations.solve(prob_ode, solver; saveat=saveat, kwargs...)
+    sol = OrdinaryDiffEq.solve(prob_ode, solver; saveat=saveat, isoutofdomain=outofdomain, kwargs...)
     if sol.retcode != :Success
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
     prob.sol = sol
-end
-
-function outofdomain(uλ, params, t)
-    u, λ = split_sol(uλ)
-    u_out = any(u .< 0.0)
-    λ_out = any((λ .< 0.0) .| (λ .> 1.0))
-    return u_out || λ_out
 end

@@ -262,6 +262,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     ss = data.ss
     u_ps = data.u_ps
     energy_bal = data.energy_bal
+    chamber_p = data.chamber_p
     sparse_ts = data.sparse_ts
     sparse_states = data.sparse_states
 
@@ -286,7 +287,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     fig = Figure(size=(1000,700))
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
-    energy_action_area = fig[3,1] = GridLayout()
+    metrics_action_area = fig[3,1] = GridLayout()
     
 
     rowsize!(fig.layout, 3, Auto(0.5))
@@ -303,12 +304,17 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
                 kwargs...)
 
     
-    ax_eb = Axis(energy_action_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
     lines!(ax_eb, ts, energy_bal)
     vlines!(ax_eb, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
 
-    ax_s = Axis(energy_action_area[1,2], xlabel="t", ylabel="s", yticklabelcolor=:darkorange1)
-    ax_u_p = Axis(energy_action_area[1,2], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:olive)
+    # Add chamber pressure
+    ax_cp = Axis(metrics_action_area[1,2], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+    lines!(ax_cp, ts, chamber_p)
+    vlines!(ax_cp, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
+
+    ax_s = Axis(metrics_action_area[1,3], xlabel="t", ylabel="s", yticklabelcolor=:darkorange1)
+    ax_u_p = Axis(metrics_action_area[1,3], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:olive)
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
