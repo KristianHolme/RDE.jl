@@ -19,10 +19,10 @@ end
 Base.length(params::RDEParam) = 1
 
 function RDEParam{T}(;
-    N=256,
+    N=512,
     L=2π,
-    ν_1=0.1,
-    ν_2=0.1,
+    ν_1=0.0075,
+    ν_2=0.0075,
     u_c=1.1,
     α=0.3,
     q_0=1.0,
@@ -32,13 +32,13 @@ function RDEParam{T}(;
     u_p=0.5,
     s=3.5,
     ϵ=0.15,
-    tmax=26.0,
+    tmax=50.0,
     x0=1.0,
     saveframes=75) where {T<:AbstractFloat}
     RDEParam{T}(N, L, ν_1, ν_2, u_c, α, q_0, u_0, n, k_param, u_p, s, ϵ, tmax, x0, saveframes)
 end
 
-RDEParam(; kwargs...) = RDEParam{Float64}(; kwargs...)
+RDEParam(; kwargs...) = RDEParam{Float32}(; kwargs...)
 
 
 
@@ -131,7 +131,7 @@ function RDEProblem(params::RDEParam{T};
     u_init = (x, x0) -> (3 / 2) * sech(x - x0)^20,
     λ_init = x -> 0.5,
     dealias = true,
-    method = :pseudospectral) where {T<:AbstractFloat}
+    method = :fd) where {T<:AbstractFloat}
 
     x = range(0, params.L, length=params.N+1)[1:end-1]
     dx = x[2] - x[1] #Assuming uniform grid spacing

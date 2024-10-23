@@ -14,7 +14,6 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
     smax::T
     u_pmax::T
     observation_samples::Int64
-    max_state_val::T
     reward_func::Function
     α::T #action momentum
 
@@ -25,7 +24,7 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
         observation_samples::Int64 = 9,
         params::RDEParam{T} = RDEParam{T}(),
         reward_func::Function = RDE_reward_combined!,
-        momentum::T = 0.5,
+        momentum = 0.5,
         kwargs...) where T <:AbstractFloat
 
         prob = RDEProblem(params; kwargs...)
@@ -33,12 +32,13 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
         init_observation = Vector{T}(undef, observation_samples*2)
         
         return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0, 
-                   smax, u_pmax, observation_samples, 100.0, reward_func, momentum)
+                   smax, u_pmax, observation_samples, reward_func, momentum)
     end
 end
 
 
-RDEEnv(;kwargs...) = RDEEnv{Float64}(;kwargs...) 
+RDEEnv(;kwargs...) = RDEEnv{Float32}(;kwargs...) 
+RDEEnv(params::RDEParam{T}) where T <: AbstractFloat = RDEEnv{T}(params=params)
 
 function interpolate_state(env::RDEEnv)
     N = env.prob.params.N
@@ -78,9 +78,6 @@ function CommonRLInterface.setstate!(env::RDEEnv, s)
     env.t = s[end]
 end
 
-# function CommonRLInterface.state_space(env::RDEEnv)
-    # (0.0 .. env.max_state_val)^env.observation_samples × (0.0 .. 1.1)^env.observation_samples 
-# end
 
 function CommonRLInterface.reset!(env::RDEEnv)
     # if env.t > 0 && env.t < 40
@@ -117,14 +114,13 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     env.prob.params.s = c[1]
     env.prob.params.u_p = c[2]
     
-
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
-    sol = OrdinaryDiffEq.solve(prob_ode)
+    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5())
     env.prob.sol = sol
     env.t = sol.t[end]
     env.state = sol.u[end]
 
-    if env.t ≥ env.prob.params.tmax || sol.retcode != :Success || maximum(abs.(env.state)) > 100
+    if env.t ≥ env.prob.params.tmax || sol.retcode != :Success
         env.done = true
     end
     env.reward_func(env)
@@ -257,5 +253,47 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
     action1 = sin(π.w_1 * t)
     action2 = sin(π.w_2 * t)
     return [action1, action2]
+end
+
+struct StepwiseRDEPolicy{T <: AbstractFloat} <: Policy
+    env::RDEEnv{T}
+    ts::Vector{T}  # Vector of time steps
+    c::Vector{Vector{T}}  # Vector of control actions
+
+    function StepwiseRDEPolicy(env::RDEEnv{T}, ts::Vector{T}, c::Vector{Vector{T}}) where T <: AbstractFloat
+        @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
+        @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
+        @assert issorted(ts) "Time steps must be in ascending order"
+        env.α = 0.0 #to assure that get_scaled_control works
+        new{T}(env, ts, c)
+    end
+end
+
+function POMDPs.action(π::StepwiseRDEPolicy, state)
+    t = state[end]
+    controls = π.c
+    s = π.env.prob.params.s
+    u_p = π.env.prob.params.u_p
+    
+    idx = searchsortedlast(π.ts, t)
+    
+    if idx == 0
+        return [0.0, 0.0]  # Default action before the first time step
+    else
+        a = zeros(2)
+        a[1] = get_scaled_control(s, π.env.smax, controls[idx][1])
+        a[2] = get_scaled_control(u_p, π.env.u_pmax, controls[idx][2])
+        return a
+    end
+end
+
+
+function get_scaled_control(current, max_val, target)
+    #assumes env.momentum == 0
+    if target < current
+        return target/current - 1.0
+    else
+        return (target - current)/(max_val - current)
+    end
 end
 

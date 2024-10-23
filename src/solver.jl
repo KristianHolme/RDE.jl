@@ -123,7 +123,7 @@ function outofdomain(uλ, params, t)
 end
 
 # Solve the PDE with an optional solver argument
-function solve_pde!(prob::RDEProblem; solver=nothing, kwargs...)
+function solve_pde!(prob::RDEProblem; solver=Tsit5(), kwargs...)
     uλ_0 = vcat(prob.u0, prob.λ0)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
 

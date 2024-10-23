@@ -1,4 +1,4 @@
-__precompile__(false)
+# __precompile__(false)
 module RDE
 
     using CommonRLInterface
@@ -18,10 +18,10 @@ module RDE
     
     export RDEParam, RDEProblem, RDEEnv, solve_pde!
     export ConstantRDEPolicy, run_policy, PolicyRunData
-    export SinusoidalRDEPolicy
+    export SinusoidalRDEPolicy, StepwiseRDEPolicy
     export plot_solution, plot_policy, plot_policy_data
     export animate_policy, animate_policy_data, animate_RDE
-    export interactive_RDE_control
+    export interactive_control
     
 
 
