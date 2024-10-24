@@ -1,7 +1,7 @@
 name = "RDE"
 uuid = "1d57ab14-0807-4ee5-93aa-665821a12dfd"
 authors = ["Kristian Holme"]
-version = "0.0.1-DEV"
+version = "0.0.1"
 
 [deps]
 CommonRLInterface = "d842c3ba-07a1-494f-bbec-f5741b0a3e98"
