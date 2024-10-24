@@ -17,16 +17,22 @@ function plot_solution(prob::RDEProblem;
     fig = Figure(size=(1000, 600))
     upper_area = fig[1,1] = GridLayout()
     plotting_area = fig[2,1] = GridLayout()
-    energy_area = fig[3,1][1,1] = GridLayout()
+    metrics_area = fig[3,1][1,1] = GridLayout()
     
 
     main_plotting(plotting_area, x, u_data, λ_data, params;u_max = u_max)
 
     # Add energy_balance_plot
     energy_bal = energy_balance(sol.u, params)
-    ax_eb = Axis(energy_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
     lines!(ax_eb, sol.t, energy_bal)
     vlines!(ax_eb, @lift(sol.t[$time_idx]), color=:green, alpha=0.5)
+
+    # Add chamber pressure
+    chamber_p = chamber_pressure(sol.u, params)
+    ax_cp = Axis(metrics_area[1,2], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+    lines!(ax_cp, sol.t, chamber_p)
+    vlines!(ax_cp, @lift(sol.t[$time_idx]), color=:green, alpha=0.5)
 
     # Time label
     label = Label(upper_area[1,1], text=@lift("Time: $(round(t_values[$time_idx], digits=2))"), tellwidth=false)
@@ -169,7 +175,7 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
 
     #Axes for ω, ξ, and β
     ω_max = @lift( maximum(ω.($u_data, params.u_c, params.α)) )
-    ξ_extrema = @lift(extrema(ξ.([0.0, $u_max], params.u_0, params.n)).*1.05)
+    ξ_max = @lift(max(1e-3, ξ($u_max, params.u_0, params.n)).*1.05)
     β_max = @lift(maximum(β.($u_data, $s, $u_p, params.k_param)))
 
     on(β_max) do val
@@ -179,16 +185,20 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     on(ω_max) do val
         hist_ω_max[] = max(hist_ω_max[], val)
     end
-    ax_ω = Axis(plotting_area_subfuncs[1,1], xticksvisible=false, xlabelvisible = false, xticklabelsvisible = false, ylabel="ω(u)", limits=@lift((nothing, (0, $hist_ω_max*1.05))))
-    ax_ξ = Axis(plotting_area_subfuncs[2,1], xticksvisible=false, xlabelvisible = false, xticklabelsvisible = false, ylabel="ξ(u)", limits=@lift((nothing, $ξ_extrema.*1.05)))
-    ax_β = Axis(plotting_area_subfuncs[3,1], xlabel="x", ylabel="β(u)", limits=@lift((nothing, (0.0,$hist_β_max*1.05))))
+    ax_ω = Axis(plotting_area_subfuncs[1,1], xticksvisible=false, xlabelvisible = false,
+                xticklabelsvisible = false, ylabel="ω(u)",
+                limits=@lift((nothing, (0, max($hist_ω_max*1.05,1e-3)))))
+    ax_ξ = Axis(plotting_area_subfuncs[2,1], xticksvisible=false, xlabelvisible = false,
+                xticklabelsvisible = false, ylabel="ξ(u)",
+                limits=@lift((nothing,(nothing,$ξ_max.*1.05))))
+    ax_β = Axis(plotting_area_subfuncs[3,1], xlabel="x", ylabel="β(u)", limits=@lift((nothing, (0.0,max($hist_β_max*1.05, 1e-3)))))
 
     
 
     #Plotting u and λ
-    ax_u = Axis(plotting_area_main[1,1], xlabel="x", ylabel="u(x, t)", title="u(x, t)", limits=@lift((nothing, (0.0,$u_max*1.05))))
+    ax_u = Axis(plotting_area_main[1,1], xlabel="x", ylabel="u(x, t)", title="u(x, t)", limits=@lift((nothing, (0.0,max($u_max*1.05, 1e-3)))))
     ax_λ = Axis(plotting_area_main[2,1], xlabel="x", ylabel="λ(x, t)", title="λ(x, t)", limits=(nothing, (-0.05,1.05)))
-    ax_u_circ = Axis3(plotting_area_main[1,2], limits=@lift((nothing, nothing, (0,$u_max*1.05))), protrusions=0)
+    ax_u_circ = Axis3(plotting_area_main[1,2], limits=@lift((nothing, nothing, (0,max($u_max*1.05, 1e-3)))), protrusions=0)
     ax_λ_circ = Axis3(plotting_area_main[2,2], limits=(nothing, nothing, (-0.05,1.05)), protrusions=0)
     
     circle_indices = [1:params.N;1]
@@ -208,8 +218,12 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     lines!(ax_λ, x, λ_data, color=:red)
 
     #plot circles
-    lines!(ax_u_circ, cos.(x[circle_indices]), sin.(x[circle_indices]), u_data_circle, color=:blue)
-    lines!(ax_λ_circ, cos.(x[circle_indices]), sin.(x[circle_indices]), λ_data_circle, color=:red)
+    L = params.L
+    r = L/(2π)
+    xs_circle = r .* cos.(x[circle_indices] .* 2π/L)
+    ys_circle = r .* sin.(x[circle_indices] .* 2π/L)
+    lines!(ax_u_circ, xs_circle, ys_circle, u_data_circle, color=:blue)
+    lines!(ax_λ_circ, xs_circle, ys_circle, λ_data_circle, color=:red)
     hidedecorations!(ax_u_circ, grid = false)
     hidedecorations!(ax_λ_circ, grid = false)
 
@@ -248,6 +262,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     ss = data.ss
     u_ps = data.u_ps
     energy_bal = data.energy_bal
+    chamber_p = data.chamber_p
     sparse_ts = data.sparse_ts
     sparse_states = data.sparse_states
 
@@ -272,7 +287,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     fig = Figure(size=(1000,700))
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
-    energy_action_area = fig[3,1] = GridLayout()
+    metrics_action_area = fig[3,1] = GridLayout()
     
 
     rowsize!(fig.layout, 3, Auto(0.5))
@@ -289,12 +304,17 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
                 kwargs...)
 
     
-    ax_eb = Axis(energy_action_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
     lines!(ax_eb, ts, energy_bal)
     vlines!(ax_eb, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
 
-    ax_s = Axis(energy_action_area[1,2], xlabel="t", ylabel="s", yticklabelcolor=:darkorange1)
-    ax_u_p = Axis(energy_action_area[1,2], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:olive)
+    # Add chamber pressure
+    ax_cp = Axis(metrics_action_area[1,2], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+    lines!(ax_cp, ts, chamber_p)
+    vlines!(ax_cp, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
+
+    ax_s = Axis(metrics_action_area[1,3], xlabel="t", ylabel="s", yticklabelcolor=:darkorange1)
+    ax_u_p = Axis(metrics_action_area[1,3], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:olive)
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
