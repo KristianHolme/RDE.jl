@@ -19,8 +19,8 @@ mutable struct RDEEnv{T <: AbstractFloat} <: AbstractEnv
 
     function RDEEnv{T}(;
         dt = 0.5,
-        smax = 5.0,
-        u_pmax = 3.0,
+        smax = 4.0,
+        u_pmax = 1.5,
         observation_samples::Int64 = 9,
         params::RDEParam{T} = RDEParam{T}(),
         reward_func::Function = RDE_reward_combined!,
@@ -115,7 +115,7 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     env.prob.params.u_p = c[2]
     
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
-    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5())
+    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=true)
     env.prob.sol = sol
     env.t = sol.t[end]
     env.state = sol.u[end]

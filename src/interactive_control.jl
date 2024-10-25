@@ -5,7 +5,7 @@ function get_timestep_scale(val)
     # step = 10^(floor(log10(val/10)))
     # return step
 end
-function interactive_control(;kwargs...)
+function interactive_control(;callback=nothing, kwargs...)
     env = RDEEnv(;kwargs...)
     params = env.prob.params
     N = params.N
@@ -122,6 +122,9 @@ function interactive_control(;kwargs...)
                             energy_bal_pts[] =  push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
                             update_observables!()
+                            if callback !== nothing
+                                callback(env)
+                            end
                         catch e
                             @error "error taking action e=$e"
                             rethrow(e)
@@ -175,4 +178,5 @@ function interactive_control(;kwargs...)
     display(fig)
     # Start the key action loop as a background task
     @async key_action_loop()
+    return env, fig
 end

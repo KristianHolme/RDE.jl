@@ -147,7 +147,7 @@ function RDEProblem(params::RDEParam{T};
     end
 
     prob = RDEProblem{T}(params, u0, λ0, x, u_init, λ_init, nothing, cache)
-    set_init_state!(prob)
+    set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
     return prob
 end
 

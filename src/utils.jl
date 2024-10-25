@@ -64,3 +64,51 @@ end
 function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T <: Real
     [chamber_pressure(uλ, params) for uλ in uλs]
 end
+
+"""
+Calculate the first derivative of a periodic function using a 3-point stencil.
+"""
+function periodic_ddx(u::Vector{T}, dx::T) where T <: Real
+    d = zeros(length(u))
+    for i in eachindex(u)
+        d[i] = (-3*u[i] + 4*u[mod1(i+1, length(u))] - u[mod1(i+2, length(u))]) / (2*dx)
+    end
+    return d
+end
+
+"""
+like regular diff, but with periodic boundary conditions.
+"""
+function periodic_diff(u::Vector{T}, dx::T) where T <: Real
+    d = similar(u)
+    d[2:end] = diff(u)
+    d[1] = u[1] - u[end]
+    return d
+end
+
+"""
+Find the indices of shocks in a periodic function.
+"""
+function shock_indices(u::Vector{T}, dx::T) where T <: Real
+    N = length(u)
+    L = N*dx
+    minu, maxu = extrema(u)
+    span = maxu - minu
+    threshold = span/dx*0.06
+    u_diff = periodic_ddx(u, dx)
+    shocks = -u_diff .> threshold
+    potential_shocks = findall(shocks)
+
+    backwards_block_distance = L*0.06
+    backwards_block = ceil(Int, backwards_block_distance/dx)
+    for i in potential_shocks
+        if any(shocks[mod1(i+1, N):mod1(i+backwards_block, N)])
+            shocks[i] = false
+        end
+    end
+    return shocks
+end
+
+function count_shocks(u::Vector{T}, dx::T) where T <: Real
+    return sum(shock_indices(u, dx))
+end

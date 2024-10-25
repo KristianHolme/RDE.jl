@@ -1,4 +1,4 @@
-using RDE, Test, TestItems, TestItemRunner
+using RDE, Test, TestItems, TestItemRunner, JLD2
 
 
 @testitem "solver" begin
