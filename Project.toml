@@ -4,6 +4,7 @@ authors = ["Kristian Holme"]
 version = "0.0.1-DEV"
 
 [deps]
+CircularArrays = "7a955b69-7140-5f4e-a0ed-f168c5e2e749"
 CommonRLInterface = "d842c3ba-07a1-494f-bbec-f5741b0a3e98"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
@@ -19,6 +20,7 @@ PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 
 [compat]
+CircularArrays = "1.4.0"
 CommonRLInterface = "0.3"
 DomainSets = "0.7"
 FFTW = "1"

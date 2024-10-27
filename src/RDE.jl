@@ -2,6 +2,7 @@
 module RDE
 
     using CommonRLInterface
+    using CircularArrays
     using DomainSets
     using FFTW
     using Interpolations
