@@ -41,13 +41,10 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     @turbo @. ξu = ξ(u, u_0, n)
     @turbo @. βu = β(u, s, u_p, k_param)
 
-    @turbo for i in eachindex(u)
-        du[i] = -u[i] * u_x[i] + (1 - λ[i]) * ωu[i] * q_0 + ν_1 * u_xx[i] + ϵ * ξu[i]
-    end
+    @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
-    @turbo for i in eachindex(λ)
-        dλ[i] = (1 - λ[i]) * ωu[i] - βu[i] * λ[i] + ν_2 * λ_xx[i]
-    end
+    # RHS for λ_t
+    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
 end
 
 function calc_derivatives!(u::T, λ::T, cache::PseudospectralRDECache) where T <:AbstractArray
@@ -117,8 +114,10 @@ function calc_derivatives!(u::T, λ::T, cache::FDRDECache) where T <: AbstractAr
     nothing
 end
 
-function outofdomain(uλ, params, t)
-    u, λ = split_sol(uλ)
+function outofdomain(uλ, prob, t)
+    N = prob.params.N
+    u = @view uλ[1:N]
+    λ = @view uλ[N+1:end]
     u_out = any(u .< 0.0)
     λ_out = any((λ .< 0.0) .| (λ .> 1.0))
     return u_out || λ_out

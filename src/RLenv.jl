@@ -115,15 +115,20 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     env.prob.params.u_p = c[2]
     
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
-    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=true, isoutofdomain=outofdomain)
+    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
     env.prob.sol = sol
     env.t = sol.t[end]
     env.state = sol.u[end]
 
-    if env.t ≥ env.prob.params.tmax || sol.retcode != :Success
+    env.reward_func(env)
+    if env.t ≥ env.prob.params.tmax
         env.done = true
     end
-    env.reward_func(env)
+    if sol.retcode != :Success
+        env.done = true
+        env.reward = -100.0
+    end
+
     return env.reward
 end
 

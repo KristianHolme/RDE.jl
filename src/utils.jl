@@ -4,6 +4,13 @@ function split_sol(uλ::Vector{T}) where T <: Real
     λ = uλ[N+1:end]
     return u, λ
 end
+function split_sol_view(uλ::Vector{T}) where T <: Real
+    N = Int(length(uλ)/2)
+    u = @view uλ[1:N]
+    λ = @view uλ[N+1:end]
+    return u, λ
+end
+
 function split_sol(uλs::Vector{Vector{T}}) where T <: Real
     tuples = split_sol.(uλs)
     us = getindex.(tuples, 1)
