@@ -331,3 +331,33 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
 
     fig
 end
+
+
+function plot_shifted_history(us::AbstractArray, x::AbstractArray,
+         ts::AbstractArray, c::Real; u_ps=nothing)
+    shifted_us = shift_inds(us, x, ts, c)
+
+    fig = Figure(size=(1800, 600))
+    ax = Axis(fig[1,1], title="u(x+ct, t)", xlabel="t",
+            ylabel="x", yzoomlock=true, ypanlock=true,
+            limits=(extrema(ts), extrema(x)), xautolimitmargin=(0.0, 0.0))
+    hm = heatmap!(ax, ts, x, stack(shifted_us)', colorscale=identity)
+    Colorbar(fig[1,2], hm)
+    
+    counts = count_shocks.(us, x[2] - x[1])
+    ax2 = Axis(fig[2,1], xlabel="t", ylabel="Number of shocks", 
+                limits=(nothing, (-0.05, maximum(counts)*1.05)),
+                xautolimitmargin=(0.0, 0.0))
+    lines!(ax2, ts, counts)
+    linkxaxes!(ax, ax2)
+
+    if u_ps !== nothing
+        ax3 = Axis(fig[3,1], xlabel="t", ylabel="u_p", 
+                    limits=(nothing, (minimum(u_ps)-0.05, maximum(u_ps)*1.05)),
+                    xautolimitmargin=(0.0, 0.0))
+        lines!(ax3, ts, u_ps)
+        linkxaxes!(ax, ax3)
+    end
+    autolimits!(ax)
+    fig
+end

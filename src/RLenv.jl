@@ -115,7 +115,7 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     env.prob.params.u_p = c[2]
     
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
-    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=true)
+    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=true, isoutofdomain=outofdomain)
     env.prob.sol = sol
     env.t = sol.t[end]
     env.state = sol.u[end]
