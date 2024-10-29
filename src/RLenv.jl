@@ -88,16 +88,19 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.state = vcat(env.prob.u0, env.prob.λ0)
     env.reward = 0.0
     env.done = false
+    env.prob.params.s = 3.5
+    env.prob.params.u_p = 0.5
     nothing
 end
 
 function CommonRLInterface.act!(env::RDEEnv, action)
     t_span = (env.t, env.t + env.dt)
-
+    
+    prev_controls = [env.prob.params.s, env.prob.params.u_p]
     c = [env.prob.params.s, env.prob.params.u_p]
     c_max = [env.smax, env.u_pmax]
 
-
+    
     for i in 1:2
         
         a = action[i]
@@ -111,8 +114,11 @@ function CommonRLInterface.act!(env::RDEEnv, action)
         end
         c[i] = env.α*c_prev + (1-env.α)*c_hat
     end
+
     env.prob.params.s = c[1]
     env.prob.params.u_p = c[2]
+
+    @debug "taking action $action at time $(env.t), controls: $prev_controls to $c"
     
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
     sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
@@ -125,6 +131,7 @@ function CommonRLInterface.act!(env::RDEEnv, action)
         env.done = true
     end
     if sol.retcode != :Success
+        @debug "ODE solver failed, controls: $prev_controls to $c"
         env.done = true
         env.reward = -100.0
     end
@@ -189,7 +196,7 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0) where 
     sparse_logged = 0
     sparse_states = Vector{Vector{T}}(undef, sparse_N)
     sparse_ts = Vector{T}(undef, sparse_N)
-
+    rewards = Vector{T}(undef, N)
     function log!(step)
         ts[step] = env.t
         ss[step] = env.prob.params.s
@@ -197,6 +204,7 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0) where 
         state = CommonRLInterface.state(env)[1:end-1]
         energy_bal[step] = energy_balance(state, env.prob.params)
         chamber_p[step] = chamber_pressure(state, env.prob.params)
+        rewards[step] = env.reward
         if (step-1)%sparse_skip == 0
             sparse_step = (step-1) ÷ sparse_skip + 1
             sparse_states[sparse_step] = state
@@ -221,7 +229,7 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0) where 
         pop!(sparse_states)
     end
 
-    return PolicyRunData(ts, ss, u_ps, energy_bal, chamber_p, sparse_ts, sparse_states)
+    return PolicyRunData(ts, ss, u_ps, energy_bal, chamber_p, rewards, sparse_ts, sparse_states)
 end
 
 struct PolicyRunData
@@ -230,6 +238,7 @@ struct PolicyRunData
     u_ps
     energy_bal
     chamber_p
+    rewards
     sparse_ts
     sparse_states
 end
