@@ -130,3 +130,29 @@ function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::R
     end
     return shifted_us
 end
+
+"""
+Return a function that to be used as the initial condition for the RDE. 
+The returned function loads a solution with n (1-4) shocks.
+"""
+function get_n_shocks_init_func(n::Int)
+    if !(1 <= n <= 4)
+        throw(ArgumentError("n must be between 1 and 4"))
+    end
+    
+    # Load data from file
+    data_file = joinpath(@__DIR__, "..", "test", "test_data", "shocks.jld2")
+    if !isfile(data_file)
+        throw(ErrorException("Test data file not found: $data_file"))
+    end
+    
+    @load data_file u1 u2 u3 u4
+    starts = [u1, u2, u3, u4]
+    x = range(0, 2π, length=513)[1:end-1]
+    # Return interpolation function
+    itp = linear_interpolation(x, starts[n], extrapolation_bc=Periodic())
+    function u_init(x)
+        return itp(x)
+    end
+    return u_init
+end

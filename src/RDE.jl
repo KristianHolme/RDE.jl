@@ -6,6 +6,7 @@ module RDE
     using DomainSets
     using FFTW
     using Interpolations
+    using JLD2
     using LinearAlgebra
     using LoopVectorization
     using Makie
@@ -23,7 +24,7 @@ module RDE
     export plot_solution, plot_policy, plot_policy_data, plot_shifted_history
     export animate_policy, animate_policy_data, animate_RDE
     export interactive_control
-    
+    export get_n_shocks_init_func
 
 
     include("structs.jl")
