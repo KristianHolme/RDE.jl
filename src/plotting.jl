@@ -158,23 +158,17 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     end
 end
 
-function main_plotting(layout::GridLayout, x, u_data::Observable, 
-        λ_data::Observable,
-        params; 
-        u_max=Observable(10.0),
-        s = Observable(params.s),
-        u_p = Observable(params.u_p),
-        show_mouse_vlines = true)
-    
-    plotting_area_subfuncs = layout[1, 1] = GridLayout()
-    plotting_area_main = layout[1, 2] = GridLayout()
-    colsize!(layout, 1, Auto(0.3))
-    
+function plot_subfunctions(layout::GridLayout, x, u_data::Observable, 
+                           params;
+                           u_max=Observable(10.0),
+                           s = Observable(params.s),
+                           u_p = Observable(params.u_p))
+
     hist_β_max = Observable(maximum(β.(u_data[], s[], u_p[], params.k_param)))
     hist_ω_max = Observable(maximum(ω.(u_data[], params.u_c, params.α)))
 
     #Axes for ω, ξ, and β
-    ω_max = @lift( maximum(ω.($u_data, params.u_c, params.α)) )
+    ω_max = @lift(maximum(ω.($u_data, params.u_c, params.α)))
     ξ_max = @lift(max(1e-3, ξ($u_max, params.u_0, params.n)).*1.05)
     β_max = @lift(maximum(β.($u_data, $s, $u_p, params.k_param)))
 
@@ -185,13 +179,68 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     on(ω_max) do val
         hist_ω_max[] = max(hist_ω_max[], val)
     end
-    ax_ω = Axis(plotting_area_subfuncs[1,1], xticksvisible=false, xlabelvisible = false,
+
+    ax_ω = Axis(layout[1,1], xticksvisible=false, xlabelvisible = false,
                 xticklabelsvisible = false, ylabel="ω(u)",
                 limits=@lift((nothing, (0, max($hist_ω_max*1.05,1e-3)))))
-    ax_ξ = Axis(plotting_area_subfuncs[2,1], xticksvisible=false, xlabelvisible = false,
+    ax_ξ = Axis(layout[2,1], xticksvisible=false, xlabelvisible = false,
                 xticklabelsvisible = false, ylabel="ξ(u)",
                 limits=@lift((nothing,(nothing,$ξ_max.*1.05))))
-    ax_β = Axis(plotting_area_subfuncs[3,1], xlabel="x", ylabel="β(u)", limits=@lift((nothing, (0.0,max($hist_β_max*1.05, 1e-3)))))
+    ax_β = Axis(layout[3,1], xlabel="x", ylabel="β(u)", 
+                limits=@lift((nothing, (0.0,max($hist_β_max*1.05, 1e-3)))))
+
+    ω_data = @lift(ω.($u_data, params.u_c, params.α))
+    ξ_data = @lift(ξ.($u_data, params.u_0, params.n))
+    β_data = @lift(β.($u_data, $s, $u_p, params.k_param))
+
+    lines!(ax_ω, x, ω_data)
+    lines!(ax_ξ, x, ξ_data)
+    lines!(ax_β, x, β_data)
+
+    return [ax_ω, ax_ξ, ax_β]
+end
+
+function main_plotting(layout::GridLayout, x, u_data::Observable, 
+        λ_data::Observable,
+        params; 
+        u_max=Observable(10.0),
+        s = Observable(params.s),
+        u_p = Observable(params.u_p),
+        show_mouse_vlines = true,
+        include_subfunctions = false)
+    
+    if include_subfunctions
+        plotting_area_subfuncs = layout[1, 1] = GridLayout()
+        plotting_area_main = layout[1, 2] = GridLayout()
+        colsize!(layout, 1, Auto(0.3))
+        subfuncs_axes = plot_subfunctions(plotting_area_subfuncs, x, u_data, params; u_max, s, u_p)
+    else
+        plotting_area_main = layout[1, 1] = GridLayout()  
+        subfuncs_axes = []
+    end
+    
+    # hist_β_max = Observable(maximum(β.(u_data[], s[], u_p[], params.k_param)))
+    # hist_ω_max = Observable(maximum(ω.(u_data[], params.u_c, params.α)))
+
+    # #Axes for ω, ξ, and β
+    # ω_max = @lift( maximum(ω.($u_data, params.u_c, params.α)) )
+    # ξ_max = @lift(max(1e-3, ξ($u_max, params.u_0, params.n)).*1.05)
+    # β_max = @lift(maximum(β.($u_data, $s, $u_p, params.k_param)))
+
+    # on(β_max) do val
+    #     hist_β_max[] = max(hist_β_max[], val)
+    # end
+
+    # on(ω_max) do val
+    #     hist_ω_max[] = max(hist_ω_max[], val)
+    # end
+    # ax_ω = Axis(plotting_area_subfuncs[1,1], xticksvisible=false, xlabelvisible = false,
+    #             xticklabelsvisible = false, ylabel="ω(u)",
+    #             limits=@lift((nothing, (0, max($hist_ω_max*1.05,1e-3)))))
+    # ax_ξ = Axis(plotting_area_subfuncs[2,1], xticksvisible=false, xlabelvisible = false,
+    #             xticklabelsvisible = false, ylabel="ξ(u)",
+    #             limits=@lift((nothing,(nothing,$ξ_max.*1.05))))
+    # ax_β = Axis(plotting_area_subfuncs[3,1], xlabel="x", ylabel="β(u)", limits=@lift((nothing, (0.0,max($hist_β_max*1.05, 1e-3)))))
 
     
 
@@ -206,14 +255,14 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     u_data_circle = @lift($u_data[circle_indices])
     λ_data_circle = @lift($λ_data[circle_indices])
 
-    ω_data = @lift(ω.($u_data, params.u_c, params.α))
-    ξ_data = @lift(ξ.($u_data, params.u_0, params.n))
-    β_data = @lift(β.($u_data, $s, $u_p, params.k_param))
+    # ω_data = @lift(ω.($u_data, params.u_c, params.α))
+    # ξ_data = @lift(ξ.($u_data, params.u_0, params.n))
+    # β_data = @lift(β.($u_data, $s, $u_p, params.k_param))
 
     # Plot lines
-    lines!(ax_ω, x, ω_data)
-    lines!(ax_ξ, x, ξ_data)
-    lines!(ax_β, x, β_data)
+    # lines!(ax_ω, x, ω_data)
+    # lines!(ax_ξ, x, ξ_data)
+    # lines!(ax_β, x, β_data)
     lines!(ax_u, x, u_data, color=:blue)
     lines!(ax_λ, x, λ_data, color=:red)
 
@@ -231,7 +280,7 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     if show_mouse_vlines
         x_cursor = Observable(0.0)
         # Add vertical lines to each axis, linked to the x_cursor observable
-        linear_axes = [ax_ω, ax_ξ, ax_β, ax_u, ax_λ]
+        linear_axes = [subfuncs_axes; ax_u; ax_λ]
         for ax in linear_axes
             vlines!(ax, x_cursor, color = :black, linestyle = :dash)
         end
@@ -263,6 +312,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     u_ps = data.u_ps
     energy_bal = data.energy_bal
     chamber_p = data.chamber_p
+    rewards = data.rewards
     sparse_ts = data.sparse_ts
     sparse_states = data.sparse_states
 
@@ -284,7 +334,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     s = @lift(ss[sparse_to_dense_ind(ts, sparse_ts, $time_idx)])
     u_p = @lift(u_ps[sparse_to_dense_ind(ts, sparse_ts, $time_idx)])
     
-    fig = Figure(size=(1000,700))
+    fig = Figure(size=(1000,900))
     upper_area = fig[1,1] = GridLayout()
     main_layout = fig[2,1] = GridLayout()
     metrics_action_area = fig[3,1] = GridLayout()
@@ -301,25 +351,41 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
                 u_max = Observable(3),
                 s = s,
                 u_p = u_p,
+                include_subfunctions = false,
                 kwargs...)
 
+
+    fine_time = @lift(sparse_ts[$time_idx])
     
-    ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", ylabel="Ė")
+    hidexdecorations!(ax_eb, grid = false)
     lines!(ax_eb, ts, energy_bal)
-    vlines!(ax_eb, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
+    vlines!(ax_eb, fine_time, color=:green, alpha=0.5)
 
     # Add chamber pressure
-    ax_cp = Axis(metrics_action_area[1,2], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+    ax_cp = Axis(metrics_action_area[2,1], title="Chamber pressure", xlabel="t", ylabel="̄u²")
     lines!(ax_cp, ts, chamber_p)
-    vlines!(ax_cp, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
+    vlines!(ax_cp, fine_time, color=:green, alpha=0.5)
 
-    ax_s = Axis(metrics_action_area[1,3], xlabel="t", ylabel="s", yticklabelcolor=:darkorange1)
-    ax_u_p = Axis(metrics_action_area[1,3], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:olive)
+    # Add rewards and shocks
+    ax_rewards = Axis(metrics_action_area[1,2], title="Rewards", ylabel="r")
+    hidexdecorations!(ax_rewards, grid = false)
+    lines!(ax_rewards, ts, rewards)
+    vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
+
+    ax_shocks = Axis(metrics_action_area[2,2], title="Shocks", xlabel="t")
+    dx = env.prob.x[2] - env.prob.x[1]
+    us, = split_sol(sparse_states)
+    lines!(ax_shocks, ts, count_shocks.(us, dx))
+    vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
+
+    ax_s = Axis(metrics_action_area[1:2,3], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
+    ax_u_p = Axis(metrics_action_area[1:2,3], ylabel="u_p", yaxisposition = :right, yticklabelcolor=:royalblue)
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-    lines!(ax_s, ts, ss, color=:darkorange1)
-    lines!(ax_u_p, ts, u_ps, color=:olive)
+    lines!(ax_s, ts, ss, color=:forestgreen)
+    lines!(ax_u_p, ts, u_ps, color=:royalblue)
     #Time indicator
     vlines!(ax_s, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
 
