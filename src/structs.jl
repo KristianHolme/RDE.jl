@@ -128,15 +128,15 @@ mutable struct RDEProblem{T<:AbstractFloat}
 end
 
 function RDEProblem(params::RDEParam{T};
-    u_init = (x, x0) -> (3 / 2) * sech(x - x0)^20,
-    λ_init = x -> 0.5,
+    u_init = x -> (3 / 2) .* sech.(x .- 1).^20,
+    λ_init = x -> 0.5 .* ones(length(x)),
     dealias = true,
     method = :fd) where {T<:AbstractFloat}
 
     x = range(0, params.L, length=params.N+1)[1:end-1]
     dx = x[2] - x[1] #Assuming uniform grid spacing
-    u0 = u_init.(x, params.x0)
-    λ0 = λ_init.(x)
+    # u0 = u_init.(x, params.x0)
+    # λ0 = λ_init.(x)
 
     cache = if method == :pseudospectral
         PseudospectralRDECache{T}(params, dealias=dealias)
@@ -146,14 +146,14 @@ function RDEProblem(params::RDEParam{T};
         throw(ArgumentError("method must be :pseudospectral or :fd"))
     end
 
-    prob = RDEProblem{T}(params, u0, λ0, x, u_init, λ_init, nothing, cache)
+    prob = RDEProblem{T}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N), x, u_init, λ_init, nothing, cache)
     set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
     return prob
 end
 
 function set_init_state!(prob::RDEProblem)
-    prob.u0 = prob.u_init.(prob.x, prob.params.x0)
-    prob.λ0 = prob.λ_init.(prob.x)
+    prob.u0 = prob.u_init(prob.x)
+    prob.λ0 = prob.λ_init(prob.x)
 end
 
 function create_dealiasing_vector(params::RDEParam{T}) where {T<:AbstractFloat}
