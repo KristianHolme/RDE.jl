@@ -2,12 +2,14 @@
 
 @test RDE.energy_balance(vcat(zeros(128), ones(128)), RDEParam{Float64}()) ≈ 0.0
 
+import JLD2: @load
 @load "test_data/shocks.jld2" u1 u2 u3 u4
 
-@test count_shocks(u1,dx) == 1
-@test count_shocks(u2,dx) == 2
-@test count_shocks(u3,dx) == 3
-@test count_shocks(u4,dx) == 4
+dx = 2π/512
+@test RDE.count_shocks(u1,dx) == 1
+@test RDE.count_shocks(u2,dx) == 2
+@test RDE.count_shocks(u3,dx) == 3
+@test RDE.count_shocks(u4,dx) == 4
 
 @test begin
     u = zeros(512)
