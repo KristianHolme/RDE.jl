@@ -400,7 +400,7 @@ end
 
 
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
-         ts::AbstractArray, c::Real; u_ps=nothing)
+         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing)
     shifted_us = shift_inds(us, x, ts, c)
 
     fig = Figure(size=(1800, 600))

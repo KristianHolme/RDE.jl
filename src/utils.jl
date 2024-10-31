@@ -120,12 +120,18 @@ function count_shocks(u::AbstractArray, dx::Real)
     return sum(shock_indices(u, dx))
 end
 
-function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
+function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Union{Real, AbstractArray})
     us = CircularArray.(us)
+    if c isa Real
+        c = fill(c, length(ts)-1)
+    end
+    pos = [0.0; cumsum(c.*diff(ts))]
+
     shifted_us = similar(us)
     dx = x[2] - x[1]
-    for j in eachindex(ts)
-        shift = Int(round(c*ts[j]/dx))
+    shifted_us[1] = us[1]
+    for j in 2:length(ts)
+        shift = Int(round(pos[j]/dx))
         shifted_us[j] = us[j][1+shift:end+shift]
     end
     return shifted_us
