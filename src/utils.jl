@@ -101,6 +101,9 @@ function shock_indices(u::AbstractArray, dx::Real)
     L = N*dx
     minu, maxu = extrema(u)
     span = maxu - minu
+    if span < 1e-1
+        return CircularArray(fill(false, N))
+    end
     threshold = span/dx*0.06
     u_diff = periodic_ddx(u, dx)
     shocks = CircularArray(-u_diff .> threshold)

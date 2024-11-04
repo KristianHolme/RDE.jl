@@ -123,6 +123,7 @@ function interactive_control(;callback=nothing, kwargs...)
                             chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
                             update_observables!()
                             if callback !== nothing
+                                @debug "calling callback"
                                 callback(env)
                             end
                         catch e
