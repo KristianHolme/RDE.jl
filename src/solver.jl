@@ -1,8 +1,17 @@
-
 ω(u, u_c, α) = exp((u - u_c) / α)
 ξ(u, u_0, n) = (u_0 - u) * u^n 
 β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
 
+
+# Add smooth control function
+function get_smooth_control(t, control_t, u_p_current, u_p_previous, τ_smooth::T) where T <: AbstractFloat
+    # Cosine smoothing from previous to current value
+    if t < τ_smooth
+        T(u_p_previous + (u_p_current - u_p_previous) * (1 - cos((π * (t - control_t))/(τ_smooth)))/2)
+    else
+        T(u_p_current)
+    end
+end
 
 # RHS function for the ODE solver using in-place operations
 function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
@@ -16,8 +25,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     u_0 = prob.params.u_0
     n = prob.params.n
     k_param = prob.params.k_param
-    u_p = prob.params.u_p
-    s = prob.params.s
+    
     
     cache = prob.cache       # Preallocated arrays
 
@@ -36,10 +44,21 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     ξu = cache.ξu                  # Real array of size N
     βu = cache.βu                  # Real array of size N
 
+    # Replace static u_p with smooth time-dependent version
+    u_p_t = get_smooth_control(t, 
+                                cache.control_time,
+                                cache.u_p_current,
+                                cache.u_p_previous, 
+                                cache.τ_smooth)
+    s_t = get_smooth_control(t, 
+                             cache.control_time,
+                             cache.s_current,
+                             cache.s_previous, 
+                             cache.τ_smooth)
     # Compute nonlinear terms using fused broadcasting
     @turbo @. ωu = ω(u, u_c, α)
     @turbo @. ξu = ξ(u, u_0, n)
-    @turbo @. βu = β(u, s, u_p, k_param)
+    @turbo @. βu = β(u, s_t, u_p_t, k_param)
 
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 

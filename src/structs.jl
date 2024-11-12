@@ -64,6 +64,12 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     dealias_filter::Vector{T}
     ik::Vector{Complex{T}}
     k2::Vector{T}
+    u_p_current::T
+    u_p_previous::T
+    τ_smooth::T
+    s_previous::T
+    s_current::T
+    control_time::T
 end
 
 function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:AbstractFloat}
@@ -87,7 +93,10 @@ function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:
         plan_rfft(Vector{T}(undef, N), flags=FFTW.MEASURE),
         plan_irfft(Vector{Complex{T}}(undef, N_complex), N, flags=FFTW.MEASURE),
         dealias_filter,
-        ik, k2
+        ik, k2,
+        T(params.u_p), T(params.u_p), T(1),
+        T(params.s), T(params.s),
+        T(0)
     )
 end
 
@@ -100,6 +109,12 @@ mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     βu::Vector{T}
     dx::T
     N::Int
+    u_p_current::T
+    u_p_previous::T
+    τ_smooth::T
+    s_previous::T
+    s_current::T
+    control_time::T
 end
 
 function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
@@ -112,7 +127,13 @@ function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
         Vector{T}(undef, N),  # ξu
         Vector{T}(undef, N),  # βu
         dx,                   # dx
-        N                     # N
+        N,                    # N
+        T(params.u_p),        # u_p_current
+        T(params.u_p),        # u_p_previous
+        T(1),                 # τ_smooth
+        T(params.s),          # s_previous
+        T(params.s),          # s_current
+        T(0)                  # control_time
     )
 end
 

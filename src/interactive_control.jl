@@ -27,16 +27,17 @@ function interactive_control(;callback=nothing, kwargs...)
     control_s = Observable(params.s)
     s_start = params.s
     on(control_s) do Val
-        params.s = Val
+        env.prob.cache.s_current = Val
     end
     control_u_p = Observable(params.u_p)
     u_p_start = params.u_p
     on(control_u_p) do val
-        params.u_p = val
+        env.prob.cache.u_p_current = val
     end
     time_step = Observable(env.dt)
     on(time_step) do val
         env.dt = val
+        env.prob.cache.τ_smooth = val
     end
     slider_s = Slider(label_area[2,1], range = 0:0.001:env.smax, startvalue = control_s[])
     on(slider_s.value) do val
@@ -49,6 +50,7 @@ function interactive_control(;callback=nothing, kwargs...)
     slider_dt = Slider(label_area[2,3], range = 0:0.001:1, startvalue = time_step[])
     on(slider_dt.value) do val
         time_step[] = val
+        env.prob.cache.τ_smooth = val
     end
 
     time = Observable(env.t)
@@ -118,7 +120,7 @@ function interactive_control(;callback=nothing, kwargs...)
 
                     elseif key == Keyboard.right
                         try
-                            act!(env, [0.0, 0.0]) #params.s and u_p is already set
+                            act!(env, [0.0, 0.0]) #cached values are already set
                             energy_bal_pts[] =  push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
                             update_observables!()

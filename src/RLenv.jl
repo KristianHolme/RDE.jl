@@ -20,17 +20,25 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     reward_func::Function
     α::T #action momentum
     c::T #shift speed
+    τ_smooth::T #smoothing time constant
     cache::RDEEnvCache{T}
     function RDEEnv{T}(;
-        dt=0.5,
+        dt=10.0,
         smax=4.0,
-        u_pmax=1.5,
+        u_pmax=1.2,
         observation_samples::Int64=-1,
         params::RDEParam{T}=RDEParam{T}(),
         reward_func::Function=RDE_reward_combined!,
         momentum=0.5,
         c=0.0,
+        τ_smooth=1.25,
         kwargs...) where {T<:AbstractFloat}
+
+        if τ_smooth > dt
+            @warn "τ_smooth > dt, this will cause discontinuities in the control signal"
+            @info "Setting τ_smooth = $(dt/8)"
+            τ_smooth = dt/8
+        end
 
         if observation_samples == -1
             observation_samples = params.N
@@ -38,11 +46,13 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         @assert observation_samples == params.N "observation_samples must be equal to params.N"
 
         prob = RDEProblem(params; kwargs...)
+        prob.cache.τ_smooth = τ_smooth
+
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = Vector{T}(undef, observation_samples * 2 + 1)
         cache = RDEEnvCache{T}(observation_samples)
         return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0,
-            smax, u_pmax, observation_samples, reward_func, momentum, c, cache)
+            smax, u_pmax, observation_samples, reward_func, momentum, c, τ_smooth, cache)
     end
 end
 
@@ -114,21 +124,31 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.state = vcat(env.prob.u0, env.prob.λ0)
     env.reward = 0.0
     env.done = false
-    env.prob.params.u_p = 0.5
+    env.reward_func(env)
+
+    env.prob.cache.τ_smooth = env.τ_smooth
+    env.prob.cache.u_p_previous = env.prob.params.u_p
+    env.prob.cache.u_p_current = env.prob.params.u_p
+    env.prob.cache.s_previous = env.prob.params.s
+    env.prob.cache.s_current = env.prob.params.s
     nothing
 end
 
 function CommonRLInterface.act!(env::RDEEnv, action)
     t_span = (env.t, env.t + env.dt)
 
-    prev_controls = [env.prob.params.s, env.prob.params.u_p]
-    c = [env.prob.params.s, env.prob.params.u_p]
+    env.prob.cache.control_time = env.t
+
+    prev_controls = [env.prob.cache.s_current, env.prob.cache.u_p_current]
+    c = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
 
     if !isa(action, AbstractArray) 
         action = [0.0, action] #only control u_p
+        # action = [3.5/env.smax*2 - 1, action]
     elseif length(action) == 1
         action = [0.0, action[1]] #only control u_p
+        # action = [3.5/env.smax*2 - 1, action[1]]
     end
     for i in 1:2
 
@@ -138,14 +158,17 @@ function CommonRLInterface.act!(env::RDEEnv, action)
         end
         c_prev = c[i]
         c_hat = a < 0 ? c_prev * (a + 1) : c_prev + (c_max[i] - c_prev) * a
-        if c_hat > c_max[i] || c_hat < 0
-            @warn "c_hat $c_hat out of bounds $c_max[$i]"
-        end
+        # c_hat = c_max[i]*(1+a)/2
+        # if c_hat > c_max[i] || c_hat < 0
+        #     @warn "c_hat $c_hat out of bounds $c_max[$i]"
+        # end
         c[i] = env.α * c_prev + (1 - env.α) * c_hat
     end
 
-    env.prob.params.s = c[1]
-    env.prob.params.u_p = c[2]
+    env.prob.cache.s_previous = env.prob.cache.s_current
+    env.prob.cache.s_current = c[1]
+    env.prob.cache.u_p_previous = env.prob.cache.u_p_current
+    env.prob.cache.u_p_current = c[2]
 
     @debug "taking action $action at time $(env.t), controls: $prev_controls to $c"
 
@@ -231,8 +254,8 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overac
     rewards = Vector{T}(undef, N)
     function log!(step)
         ts[step] = env.t
-        ss[step] = env.prob.params.s
-        u_ps[step] = env.prob.params.u_p
+        ss[step] = env.prob.cache.s_current
+        u_ps[step] = env.prob.cache.u_p_current
         state = CommonRLInterface.state(env)[1:end-1]
         energy_bal[step] = energy_balance(state, env.prob.params)
         chamber_p[step] = chamber_pressure(state, env.prob.params)
@@ -251,7 +274,7 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overac
 
     for step = 1:N
         log!(step)
-        action = mod(step, overacting) == 1 ? POMDPs.action(π, observe(env)) : [0.0, 0.0]
+        action = overacting==1 ||mod(step, overacting) == 1 ? POMDPs.action(π, observe(env)) : [0.0, 0.0]
         act!(env, action)
     end
 
@@ -319,10 +342,11 @@ end
 function POMDPs.action(π::StepwiseRDEPolicy, state)
     t = state[end]
     controls = π.c
-    s = π.env.prob.params.s
-    u_p = π.env.prob.params.u_p
-
+    s = π.env.prob.cache.s_current
+    u_p = π.env.prob.cache.u_p_current
+    
     idx = searchsortedlast(π.ts, t)
+    @debug "t = $t, s = $s, u_p = $u_p, idx = $idx"
 
     if idx == 0
         return [0.0, 0.0]  # Default action before the first time step
