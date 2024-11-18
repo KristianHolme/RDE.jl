@@ -33,3 +33,44 @@ end
 @test RDE.β(1.0, 1.0, 1.0, 1.0) ≈ 0.5
 @test RDE.β(2.0, 3.5, 0.56, 5.0) ≈ 0.0014622165143
 
+@test begin
+    # Test smooth transition
+    t = 0.5
+    control_t = 0.0
+    current = 2.0
+    previous = 1.0
+    τ_smooth = 1.0
+    
+    # At t = 0.5τ_smooth, should be halfway through transition
+    c = RDE.smooth_control(t, control_t, current, previous, τ_smooth)
+    isapprox(c, 1.5, rtol=1e-6)
+end
+
+@test begin
+    # Test after transition period
+    t = 2.0
+    control_t = 0.0
+    current = 2.0
+    previous = 1.0
+    τ_smooth = 1.0
+    
+    c = RDE.smooth_control(t, control_t, current, previous, τ_smooth)
+    c ≈ current
+end
+
+@test begin
+    # Test at start of transition
+    t = 0.0
+    control_t = 0.0
+    current = 2.0
+    previous = 1.0
+    τ_smooth = 1.0
+    
+    c = RDE.smooth_control(t, control_t, current, previous, τ_smooth)
+    c ≈ previous
+end
+
+
+
+
+

@@ -4,12 +4,13 @@
 
 
 # Add smooth control function
-function get_smooth_control(t, control_t, u_p_current, u_p_previous, τ_smooth::T) where T <: AbstractFloat
+function smooth_control(t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
     # Cosine smoothing from previous to current value
-    if t < τ_smooth
-        T(u_p_previous + (u_p_current - u_p_previous) * (1 - cos((π * (t - control_t))/(τ_smooth)))/2)
+    if (t - control_t) < τ_smooth
+        Δc = current_value - previous_value
+        return previous_value + Δc * (0.5 - 0.5*cos(π * (t - control_t)/τ_smooth))
     else
-        T(u_p_current)
+        return current_value
     end
 end
 
@@ -43,27 +44,31 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     ωu = cache.ωu                  # Real array of size N
     ξu = cache.ξu                  # Real array of size N
     βu = cache.βu                  # Real array of size N
+    u_p_t = cache.u_p_t
+    s_t = cache.s_t
 
     # Replace static u_p with smooth time-dependent version
-    u_p_t = get_smooth_control(t, 
-                                cache.control_time,
-                                cache.u_p_current,
-                                cache.u_p_previous, 
-                                cache.τ_smooth)
-    s_t = get_smooth_control(t, 
-                             cache.control_time,
-                             cache.s_current,
-                             cache.s_previous, 
-                             cache.τ_smooth)
+    u_p_t = smooth_control(t, 
+                    cache.control_time,
+                    cache.u_p_current,
+                    cache.u_p_previous, 
+                    cache.τ_smooth)
+    s_t = smooth_control(t, 
+                    cache.control_time,
+                    cache.s_current,
+                    cache.s_previous, 
+                    cache.τ_smooth)
+    @debug "RHS:u_p_t $u_p_t, s_t $s_t at time $t"
+    @debug "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
     # Compute nonlinear terms using fused broadcasting
     @turbo @. ωu = ω(u, u_c, α)
     @turbo @. ξu = ξ(u, u_0, n)
     @turbo @. βu = β(u, s_t, u_p_t, k_param)
 
+    # Combine both loops to reduce overhead
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
-
-    # RHS for λ_t
     @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
+    nothing
 end
 
 function calc_derivatives!(u::T, λ::T, cache::PseudospectralRDECache) where T <:AbstractArray

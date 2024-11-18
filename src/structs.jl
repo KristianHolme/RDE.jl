@@ -70,6 +70,8 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     s_previous::T
     s_current::T
     control_time::T
+    u_p_t::T
+    s_t::T
 end
 
 function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:AbstractFloat}
@@ -96,7 +98,7 @@ function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:
         ik, k2,
         T(params.u_p), T(params.u_p), T(1),
         T(params.s), T(params.s),
-        T(0)
+        T(0), T(params.u_p), T(params.s)
     )
 end
 
@@ -115,6 +117,8 @@ mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     s_previous::T
     s_current::T
     control_time::T
+    u_p_t::T
+    s_t::T
 end
 
 function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
@@ -133,7 +137,9 @@ function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
         T(1),                 # τ_smooth
         T(params.s),          # s_previous
         T(params.s),          # s_current
-        T(0)                  # control_time
+        T(0),                 # control_time
+        T(params.u_p),        # u_p_t
+        T(params.s),          # s_t
     )
 end
 

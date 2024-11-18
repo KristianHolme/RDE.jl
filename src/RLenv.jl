@@ -134,7 +134,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     nothing
 end
 
-function CommonRLInterface.act!(env::RDEEnv, action)
+function CommonRLInterface.act!(env::RDEEnv{T}, action) where {T<:AbstractFloat}
     t_span = (env.t, env.t + env.dt)
 
     env.prob.cache.control_time = env.t
@@ -144,10 +144,10 @@ function CommonRLInterface.act!(env::RDEEnv, action)
     c_max = [env.smax, env.u_pmax]
 
     if !isa(action, AbstractArray) 
-        action = [0.0, action] #only control u_p
+        action = [T(0.0), action] #only control u_p
         # action = [3.5/env.smax*2 - 1, action]
     elseif length(action) == 1
-        action = [0.0, action[1]] #only control u_p
+        action = [T(0.0), action[1]] #only control u_p
         # action = [3.5/env.smax*2 - 1, action[1]]
     end
     for i in 1:2
@@ -232,7 +232,36 @@ function RDE_reward_combined!(env::RDEEnv)
 end
 
 
+"""
+    run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overacting=1) where {T}
 
+Run a policy `π` on the RDE environment and collect trajectory data.
+
+# Arguments
+- `π::Policy`: Policy to execute
+- `env::RDEEnv{T}`: RDE environment to run the policy in
+- `sparse_skip=1`: Save full state every `sparse_skip` steps
+- `tmax=26.0`: Maximum simulation time
+- `overacting=1`: Number of environment steps per policy action. When > 1, zero actions are taken between policy actions.
+
+# Returns
+`PolicyRunData` containing:
+- `ts`: Time points
+- `ss`: Control parameter s values
+- `u_ps`: Control parameter u_p values  
+- `energy_bal`: Energy balance at each step
+- `chamber_p`: Chamber pressure at each step
+- `rewards`: Rewards received
+- `sparse_ts`: Sparse time points
+- `sparse_states`: Full system state at sparse time points
+
+# Example
+´´´julia
+env = RDEEnv()
+policy = ConstantRDEPolicy(env)
+data = run_policy(policy, env, sparse_skip=10)
+´´´
+"""
 function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overacting=1) where {T}
     reset!(env)
     env.prob.params.tmax = tmax
@@ -274,7 +303,8 @@ function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overac
 
     for step = 1:N
         log!(step)
-        action = overacting==1 ||mod(step, overacting) == 1 ? POMDPs.action(π, observe(env)) : [0.0, 0.0]
+        action = overacting == 1 || mod(step, overacting) == 1 ? POMDPs.action(π, observe(env)) : [0.0, 0.0]
+        @debug "step $step, action $action"
         act!(env, action)
     end
 
