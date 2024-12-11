@@ -1,8 +1,18 @@
 mutable struct RDEEnvCache{T<:AbstractFloat}
     circ_u::CircularVector{T, Vector{T}}
     circ_λ::CircularVector{T, Vector{T}}
-    function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
-        return new{T}(CircularArray(Vector{T}(undef, N)), CircularArray(Vector{T}(undef, N)))
+    prev_u::Vector{T}  # Previous step's u values
+    prev_λ::Vector{T}  # Previous step's λ values
+    fft_terms::Int  # Number of Fourier terms to keep
+    function RDEEnvCache{T}(N::Int; fft_terms::Int=8) where {T<:AbstractFloat}
+        @assert fft_terms <= N "Number of FFT terms cannot exceed spatial resolution"
+        return new{T}(
+            CircularArray(Vector{T}(undef, N)), 
+            CircularArray(Vector{T}(undef, N)),
+            Vector{T}(undef, N),
+            Vector{T}(undef, N),
+            fft_terms
+        )
     end
 end
 
@@ -32,6 +42,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         momentum=0.5,
         c=0.0,
         τ_smooth=1.25,
+        fft_terms::Int=32,
         kwargs...) where {T<:AbstractFloat}
 
         if τ_smooth > dt
@@ -49,8 +60,8 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         prob.cache.τ_smooth = τ_smooth
 
         initial_state = vcat(prob.u0, prob.λ0)
-        init_observation = Vector{T}(undef, observation_samples * 2 + 1)
-        cache = RDEEnvCache{T}(observation_samples)
+        init_observation = Vector{T}(undef, fft_terms * 2 + 1)
+        cache = RDEEnvCache{T}(observation_samples; fft_terms=fft_terms)
         return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0,
             smax, u_pmax, observation_samples, reward_func, momentum, c, τ_smooth, cache)
     end
@@ -82,16 +93,37 @@ CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
 CommonRLInterface.terminated(env::RDEEnv) = env.done
 function CommonRLInterface.observe(env::RDEEnv)
     N = env.prob.params.N
-    dx = env.prob.params.L / env.prob.params.N
-    #return shifted state and fuel level
-    env.cache.circ_u[:] .= @view env.state[1:N]
-    env.cache.circ_λ[:] .= @view env.state[N+1:end]
-
-    shift = Int(round(env.c*env.t/dx))
-
-    shifted_u = env.cache.circ_u[1+shift:end+shift]
-    shifted_λ = env.cache.circ_λ[1+shift:end+shift]
-    return vcat(shifted_u, shifted_λ, env.t)
+    
+    # Get current state components
+    current_u = @view env.state[1:N]
+    current_λ = @view env.state[N+1:end]
+    
+    # Calculate state differences
+    env.cache.circ_u[:] .= current_u .- env.cache.prev_u
+    env.cache.circ_λ[:] .= current_λ .- env.cache.prev_λ
+    
+    # Compute FFT and get magnitudes (shift-invariant)
+    fft_u = abs.(fft(env.cache.circ_u))
+    fft_λ = abs.(fft(env.cache.circ_λ))
+    
+    # Keep only first n terms (up to Nyquist frequency)
+    n_terms = min(env.cache.fft_terms, N ÷ 2 + 1)
+    
+    # Normalize FFT coefficients
+    # We can use the DC component (first coefficient) as normalization factor
+    # Adding a small epsilon to avoid division by zero
+    ϵ = 1e-8
+    norm_factor_u = max(maximum(fft_u), ϵ)
+    norm_factor_λ = max(maximum(fft_λ), ϵ)
+    
+    u_obs = fft_u[1:n_terms] ./ norm_factor_u
+    λ_obs = fft_λ[1:n_terms] ./ norm_factor_λ
+    
+    # Add normalized time to observation
+    normalized_time = env.t / env.prob.params.tmax
+    
+    # Return concatenated FFT magnitudes and normalized time
+    return vcat(u_obs, λ_obs, normalized_time)
 end
 
 function CommonRLInterface.actions(env::RDEEnv)
@@ -131,10 +163,21 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.prob.cache.u_p_current = env.prob.params.u_p
     env.prob.cache.s_previous = env.prob.params.s
     env.prob.cache.s_current = env.prob.params.s
+
+    # Initialize previous state
+    N = env.prob.params.N
+    env.cache.prev_u .= @view env.state[1:N]
+    env.cache.prev_λ .= @view env.state[N+1:end]
+    
     nothing
 end
 
 function CommonRLInterface.act!(env::RDEEnv{T}, action) where {T<:AbstractFloat}
+    # Store current state before taking action
+    N = env.prob.params.N
+    env.cache.prev_u .= @view env.state[1:N]
+    env.cache.prev_λ .= @view env.state[N+1:end]
+
     t_span = (env.t, env.t + env.dt)
 
     env.prob.cache.control_time = env.t
