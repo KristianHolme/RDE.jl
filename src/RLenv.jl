@@ -172,7 +172,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     nothing
 end
 
-function CommonRLInterface.act!(env::RDEEnv{T}, action) where {T<:AbstractFloat}
+function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
     # Store current state before taking action
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
@@ -216,7 +216,15 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action) where {T<:AbstractFloat}
     @debug "taking action $action at time $(env.t), controls: $prev_controls to $c"
 
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
-    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
+    
+    # Determine solver settings based on extra_saves_per_step
+    if saves_per_action == 0
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
+    else
+        saveat = env.dt / saves_per_action
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, isoutofdomain=outofdomain)
+    end
+
     env.prob.sol = sol
     env.t = sol.t[end]
     env.state = sol.u[end]
@@ -283,93 +291,81 @@ Run a policy `π` on the RDE environment and collect trajectory data.
 # Arguments
 - `π::Policy`: Policy to execute
 - `env::RDEEnv{T}`: RDE environment to run the policy in
-- `sparse_skip=1`: Save full state every `sparse_skip` steps
-- `tmax=26.0`: Maximum simulation time
-- `overacting=1`: Number of environment steps per policy action. When > 1, zero actions are taken between policy actions.
+- `saves_per_action=1`: Save full state every `saves_per_action` steps
 
 # Returns
 `PolicyRunData` containing:
-- `ts`: Time points
+- `ts`: Time points for each action
 - `ss`: Control parameter s values
 - `u_ps`: Control parameter u_p values  
+- `rewards`: Rewards received
 - `energy_bal`: Energy balance at each step
 - `chamber_p`: Chamber pressure at each step
-- `rewards`: Rewards received
-- `sparse_ts`: Sparse time points
-- `sparse_states`: Full system state at sparse time points
+- `state_ts`: Time points for each state
+- `states`: Full system state at each time point
 
 # Example
 ´´´julia
 env = RDEEnv()
 policy = ConstantRDEPolicy(env)
-data = run_policy(policy, env, sparse_skip=10)
+data = run_policy(policy, env, saves_per_action=10)
 ´´´
 """
-function run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overacting=1) where {T}
+function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
-    env.prob.params.tmax = tmax
-    original_dt = env.dt
-    original_tmax = env.prob.params.tmax
-    dt = env.dt / overacting
-    env.dt = dt
-    N = ceil(tmax / dt) + 1 |> Int
+    dt = env.dt
+    N = ceil(env.prob.params.tmax / dt) + 1 |> Int
 
     ts = Vector{T}(undef, N)
     ss = Vector{T}(undef, N)
     u_ps = Vector{T}(undef, N)
-    energy_bal = Vector{T}(undef, N)
-    chamber_p = Vector{T}(undef, N)
-    sparse_N = Int(ceil(N / sparse_skip))
-    sparse_logged = 0
-    sparse_states = Vector{Vector{T}}(undef, sparse_N)
-    sparse_ts = Vector{T}(undef, sparse_N)
+    energy_bal = Vector{T}(undef, N*saves_per_action)
+    chamber_p = Vector{T}(undef, N*saves_per_action)
+    states = Vector{Vector{T}}(undef, N*saves_per_action)
+    state_ts = Vector{T}(undef, N*saves_per_action)
     rewards = Vector{T}(undef, N)
     function log!(step)
         ts[step] = env.t
         ss[step] = env.prob.cache.s_current
         u_ps[step] = env.prob.cache.u_p_current
-        state = CommonRLInterface.state(env)[1:end-1]
-        energy_bal[step] = energy_balance(state, env.prob.params)
-        chamber_p[step] = chamber_pressure(state, env.prob.params)
         rewards[step] = env.reward
-        if (step - 1) % sparse_skip == 0
-            sparse_step = (step - 1) ÷ sparse_skip + 1
-            sparse_states[sparse_step] = state
-            sparse_ts[sparse_step] = env.t
-            sparse_logged += 1
-        elseif step == N
-            sparse_logged += 1
-            sparse_states[end] = state
-            sparse_ts[end] = env.t
-        end
+
+        step_states = env.prob.sol.u[2:end]
+        step_ts = env.prob.sol.t[2:end]
+
+        # Calculate indices for this step's data
+        start_idx = (step-1)*saves_per_action + 1
+        end_idx = step*saves_per_action
+        
+        # Save states and timestamps
+        state_ts[start_idx:end_idx] = step_ts
+        states[start_idx:end_idx] = step_states
+        
+        # Save energy balance and chamber pressure
+        energy_bal[start_idx:end_idx] = energy_balance(step_states, env.prob.params)
+        chamber_p[start_idx:end_idx] = chamber_pressure(step_states, env.prob.params)
+        
     end
 
     for step = 1:N
+        action = POMDPs.action(π, observe(env))
+        # @debug "step $step, action $action"
+        act!(env, action, saves_per_action=saves_per_action)
         log!(step)
-        action = overacting == 1 || mod(step, overacting) == 1 ? POMDPs.action(π, observe(env)) : [0.0, 0.0]
-        @debug "step $step, action $action"
-        act!(env, action)
     end
 
-    if sparse_logged != sparse_N
-        @warn "sparse logged= $(sparse_logged) not equal to sparse N= $(sparse_N)"
-        pop!(sparse_ts)
-        pop!(sparse_states)
-    end
-    env.dt = original_dt
-    env.prob.params.tmax = original_tmax
-    return PolicyRunData(ts, ss, u_ps, energy_bal, chamber_p, rewards, sparse_ts, sparse_states)
+    return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states)
 end
 
-struct PolicyRunData
-    ts
-    ss
-    u_ps
-    energy_bal
-    chamber_p
-    rewards
-    sparse_ts
-    sparse_states
+struct PolicyRunData{T<:AbstractFloat}
+    action_ts::Vector{T} #time points for actions
+    ss::Vector{T} #control parameter s at each action
+    u_ps::Vector{T} #control parameter u_p at each action
+    rewards::Vector{T} #rewards at each action
+    energy_bal::Vector{T} #energy balance at each state
+    chamber_p::Vector{T} #chamber pressure at each state
+    state_ts::Vector{T} #time points for states
+    states::Vector{Vector{T}} #states at each time point
 end
 
 struct ConstantRDEPolicy <: Policy
@@ -440,4 +436,17 @@ function get_scaled_control(current, max_val, target)
         return (target - current) / (max_val - current)
     end
 end
+
+
+struct RandomRDEPolicy{T<:AbstractFloat} <: Policy
+    env::RDEEnv{T}
+end
+
+function POMDPs.action(π::RandomRDEPolicy, state)
+    # Generate two random numbers between -1 and 1
+    action1 = 2 * rand() - 1
+    action2 = 2 * rand() - 1
+    return [0.0, action2]
+end
+
 

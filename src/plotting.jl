@@ -307,32 +307,33 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
         time_idx = Observable(1),
         player_controls=true,
         kwargs...)
-    ts = data.ts
+    action_ts = data.action_ts
     ss = data.ss
     u_ps = data.u_ps
     energy_bal = data.energy_bal
     chamber_p = data.chamber_p
     rewards = data.rewards
-    sparse_ts = data.sparse_ts
-    sparse_states = data.sparse_states
+
+    state_ts = data.state_ts
+    states = data.states
 
     N = env.prob.params.N
 
 
-    function sparse_to_dense_ind(dense_time::Vector, sparse_time::Vector, sparse_ind::Int)
-        sp_val = sparse_time[sparse_ind]
-        dense_ind = argmin(abs.(dense_time .- sp_val))
+    function sparse_to_dense_ind(dense_time::Vector, sparse_time::Vector, dense_ind::Int)
+        dense_val = dense_time[dense_ind]
+        sparse_ind = argmin(abs.(sparse_time .- dense_val))
         # @info sparse_ind dense_ind sp_val "$(dense_time[dense_ind])"
-        return dense_ind
+        return sparse_ind
     end
 
 
     
-    u_data = @lift(sparse_states[$time_idx][1:N])
-    λ_data = @lift(sparse_states[$time_idx][N+1:end])
+    u_data = @lift(states[$time_idx][1:N])
+    λ_data = @lift(states[$time_idx][N+1:end])
     # @info sparse_to_dense_ind(ts, sparse_ts, 3)
-    s = @lift(ss[sparse_to_dense_ind(ts, sparse_ts, $time_idx)])
-    u_p = @lift(u_ps[sparse_to_dense_ind(ts, sparse_ts, $time_idx)])
+    s = @lift(ss[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
+    u_p = @lift(u_ps[sparse_to_dense_ind(state_ts, action_ts, $time_idx)])
     
     fig = Figure(size=(1000,900))
     upper_area = fig[1,1] = GridLayout()
@@ -343,7 +344,7 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     rowsize!(fig.layout, 3, Auto(0.5))
 
 
-    label = Label(upper_area[1,1], text=@lift("Time: $(round(sparse_ts[$time_idx], digits=2))"), tellwidth=false)
+    label = Label(upper_area[1,1], text=@lift("Time: $(round(state_ts[$time_idx], digits=2))"), tellwidth=false)
 
     main_plotting(main_layout, env.prob.x, u_data, λ_data, 
                 env.prob.params;
@@ -355,28 +356,28 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
                 kwargs...)
 
 
-    fine_time = @lift(sparse_ts[$time_idx])
+    fine_time = @lift(state_ts[$time_idx])
     
     ax_eb = Axis(metrics_action_area[1,1], title="Energy balance", ylabel="Ė")
     hidexdecorations!(ax_eb, grid = false)
-    lines!(ax_eb, ts, energy_bal)
+    lines!(ax_eb, state_ts, energy_bal)
     vlines!(ax_eb, fine_time, color=:green, alpha=0.5)
 
     # Add chamber pressure
     ax_cp = Axis(metrics_action_area[2,1], title="Chamber pressure", xlabel="t", ylabel="̄u²")
-    lines!(ax_cp, ts, chamber_p)
+    lines!(ax_cp, state_ts, chamber_p)
     vlines!(ax_cp, fine_time, color=:green, alpha=0.5)
 
     # Add rewards and shocks
     ax_rewards = Axis(metrics_action_area[1,2], title="Rewards", ylabel="r")
     hidexdecorations!(ax_rewards, grid = false)
-    lines!(ax_rewards, ts, rewards)
+    lines!(ax_rewards, action_ts, rewards)
     vlines!(ax_rewards, fine_time, color=:green, alpha=0.5)
 
     ax_shocks = Axis(metrics_action_area[2,2], title="Shocks", xlabel="t")
     dx = env.prob.x[2] - env.prob.x[1]
-    us, = split_sol(sparse_states)
-    lines!(ax_shocks, ts, count_shocks.(us, dx))
+    us, = split_sol(states)
+    lines!(ax_shocks, state_ts, count_shocks.(us, dx))
     vlines!(ax_shocks, fine_time, color=:green, alpha=0.5)
 
     ax_s = Axis(metrics_action_area[1:2,3], xlabel="t", ylabel="s", yticklabelcolor=:forestgreen)
@@ -384,15 +385,15 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     hidespines!(ax_u_p)
     hidexdecorations!(ax_u_p)
     hideydecorations!(ax_u_p, ticklabels=false, ticks=false, label=false)
-    lines!(ax_s, ts, ss, color=:forestgreen)
-    lines!(ax_u_p, ts, u_ps, color=:royalblue)
+    lines!(ax_s, action_ts, ss, color=:forestgreen)
+    lines!(ax_u_p, action_ts, u_ps, color=:royalblue)
     #Time indicator
-    vlines!(ax_s, @lift(sparse_ts[$time_idx]), color=:green, alpha=0.5)
+    vlines!(ax_s, fine_time, color=:green, alpha=0.5)
 
     # @show length(sparse_ts)
     if player_controls
         play_ctrl_area = fig[4,1] = GridLayout()
-        plot_controls(play_ctrl_area, time_idx, length(sparse_ts))
+        plot_controls(play_ctrl_area, time_idx, length(state_ts))
     end
 
     fig

@@ -52,7 +52,7 @@ function energy_balance(uλ::Vector{T}, params::RDEParam) where T <: Real
     energy_balance(u, λ, params)
 end
 function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T<:Real}
-    [energy_balance(uλ, params) for uλ in uλs]
+    energy_balance.(uλs, Ref(params))
 end
 
 function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T <: Real

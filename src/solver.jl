@@ -4,15 +4,21 @@
 
 
 # Add smooth control function
+smooth_f(x::Real) = x > zero(x) ? exp(-1/x) : zero(x)
+smooth_g(x::Real) = smooth_f(x)/(smooth_f(x)+smooth_f(1-x))
 function smooth_control(t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
-    # Cosine smoothing from previous to current value
-    if (t - control_t) < τ_smooth
-        Δc = current_value - previous_value
-        return previous_value + Δc * (0.5 - 0.5*cos(π * (t - control_t)/τ_smooth))
-    else
-        return current_value
-    end
+    progress = smooth_g((t - control_t)/τ_smooth)
+    return previous_value + (current_value - previous_value) * progress
+    # # Cosine smoothing from previous to current value
+    # if (t - control_t) < τ_smooth
+    #     Δc = current_value - previous_value
+    #     return previous_value + Δc * (0.5 - 0.5*cos(π * (t - control_t)/τ_smooth))
+    # else
+    #     return current_value
+    # end
 end
+
+
 
 # RHS function for the ODE solver using in-place operations
 function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
