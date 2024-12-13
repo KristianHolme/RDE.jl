@@ -64,17 +64,20 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     dealias_filter::Vector{T}
     ik::Vector{Complex{T}}
     k2::Vector{T}
-    u_p_current::T
-    u_p_previous::T
+    u_p_current::Vector{T}
+    u_p_previous::Vector{T}
     τ_smooth::T
-    s_previous::T
-    s_current::T
+    s_previous::Vector{T}
+    s_current::Vector{T}
     control_time::T
-    u_p_t::T
-    s_t::T
+    u_p_t::Vector{T}
+    s_t::Vector{T}
+    u_p_t_shifted::Vector{T}
+    s_t_shifted::Vector{T}
 end
 
-function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:AbstractFloat}
+function PseudospectralRDECache{T}(params::RDEParam{T}; 
+        dealias=true) where {T<:AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
     
@@ -96,9 +99,13 @@ function PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:
         plan_irfft(Vector{Complex{T}}(undef, N_complex), N, flags=FFTW.MEASURE),
         dealias_filter,
         ik, k2,
-        T(params.u_p), T(params.u_p), T(1),
-        T(params.s), T(params.s),
-        T(0), T(params.u_p), T(params.s)
+        fill(params.u_p, N), fill(params.u_p, N), T(1),
+        fill(params.s, N), fill(params.s, N),
+        T(0),
+        fill(params.u_p, N),  # u_p_t
+        fill(params.s, N),    # s_t
+        fill(params.u_p, N),  # u_p_t_shifted
+        fill(params.s, N),    # s_t_shifted
     )
 end
 
@@ -111,14 +118,16 @@ mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     βu::Vector{T}
     dx::T
     N::Int
-    u_p_current::T
-    u_p_previous::T
+    u_p_current::Vector{T}
+    u_p_previous::Vector{T}
     τ_smooth::T
-    s_previous::T
-    s_current::T
+    s_previous::Vector{T}
+    s_current::Vector{T}
     control_time::T
-    u_p_t::T
-    s_t::T
+    u_p_t::Vector{T}
+    s_t::Vector{T}
+    u_p_t_shifted::Vector{T}
+    s_t_shifted::Vector{T}
 end
 
 function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
@@ -132,14 +141,16 @@ function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
         Vector{T}(undef, N),  # βu
         dx,                   # dx
         N,                    # N
-        T(params.u_p),        # u_p_current
-        T(params.u_p),        # u_p_previous
+        fill(params.u_p, N),  # u_p_current
+        fill(params.u_p, N),  # u_p_previous
         T(1),                 # τ_smooth
-        T(params.s),          # s_previous
-        T(params.s),          # s_current
+        fill(params.s, N),    # s_previous
+        fill(params.s, N),    # s_current
         T(0),                 # control_time
-        T(params.u_p),        # u_p_t
-        T(params.s),          # s_t
+        fill(params.u_p, N),  # u_p_t
+        fill(params.s, N),    # s_t
+        fill(params.u_p, N),  # u_p_t_shifted
+        fill(params.s, N),    # s_t_shifted
     )
 end
 
@@ -152,13 +163,15 @@ mutable struct RDEProblem{T<:AbstractFloat}
     λ_init::Function
     sol::Union{Nothing, Any}
     cache::AbstractRDECache{T}
+    control_shift_func::Function
 end
 
 function RDEProblem(params::RDEParam{T};
     u_init = x -> (3 / 2) .* sech.(x .- 1).^20,
     λ_init = x -> 0.5 .* ones(length(x)),
     dealias = true,
-    method = :fd) where {T<:AbstractFloat}
+    method = :fd,
+    control_shift_func = (u, t) -> zero(T)) where {T<:AbstractFloat}
 
     x = range(0, params.L, length=params.N+1)[1:end-1]
     dx = x[2] - x[1] #Assuming uniform grid spacing
@@ -173,7 +186,8 @@ function RDEProblem(params::RDEParam{T};
         throw(ArgumentError("method must be :pseudospectral or :fd"))
     end
 
-    prob = RDEProblem{T}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N), x, u_init, λ_init, nothing, cache)
+    prob = RDEProblem{T}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N), 
+                         x, u_init, λ_init, nothing, cache, control_shift_func)
     set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
     return prob
 end

@@ -25,8 +25,10 @@ module RDE
     export animate_policy, animate_policy_data, animate_RDE
     export interactive_control
     export get_n_shocks_init_func
+    export get_standard_normalized_actions, AbstractActionType, ScalarPressureAction, 
+           VectorPressureAction, ScalarAreaScalarPressureAction
 
-
+    include("action_types.jl")
     include("structs.jl")
     include("utils.jl")
     include("solver.jl")

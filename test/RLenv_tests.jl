@@ -13,6 +13,6 @@ end
 
 @test begin
     ConstPolicy = ConstantRDEPolicy();
-    data = run_policy(ConstPolicy, RDEEnv(); tmax = 0.1);
+    data = run_policy(ConstPolicy, RDEEnv(RDEParam(;N=16, tmax = 0.1)));
     data isa PolicyRunData
 end

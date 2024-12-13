@@ -29,9 +29,9 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     observation_samples::Int64
     reward_func::Function
     α::T #action momentum
-    c::T #shift speed
     τ_smooth::T #smoothing time constant
     cache::RDEEnvCache{T}
+    action_type::AbstractActionType
     function RDEEnv{T}(;
         dt=10.0,
         smax=4.0,
@@ -43,6 +43,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         c=0.0,
         τ_smooth=1.25,
         fft_terms::Int=32,
+        action_type::AbstractActionType=ScalarPressureAction(),
         kwargs...) where {T<:AbstractFloat}
 
         if τ_smooth > dt
@@ -59,11 +60,16 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         prob = RDEProblem(params; kwargs...)
         prob.cache.τ_smooth = τ_smooth
 
+        # Set N in action_type
+        set_N!(action_type, params.N)
+
+        fft_terms = min(fft_terms, params.N ÷ 2)
+
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = Vector{T}(undef, fft_terms * 2 + 1)
         cache = RDEEnvCache{T}(observation_samples; fft_terms=fft_terms)
         return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0,
-            smax, u_pmax, observation_samples, reward_func, momentum, c, τ_smooth, cache)
+            smax, u_pmax, observation_samples, reward_func, momentum, τ_smooth, cache, action_type)
     end
 end
 
@@ -159,10 +165,10 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.reward_func(env)
 
     env.prob.cache.τ_smooth = env.τ_smooth
-    env.prob.cache.u_p_previous = env.prob.params.u_p
-    env.prob.cache.u_p_current = env.prob.params.u_p
-    env.prob.cache.s_previous = env.prob.params.s
-    env.prob.cache.s_current = env.prob.params.s
+    env.prob.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
+    env.prob.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
 
     # Initialize previous state
     N = env.prob.params.N
@@ -186,31 +192,29 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     c = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
 
-    if !isa(action, AbstractArray) 
-        action = [T(0.0), action] #only control u_p
-        # action = [3.5/env.smax*2 - 1, action]
-    elseif length(action) == 1
-        action = [T(0.0), action[1]] #only control u_p
-        # action = [3.5/env.smax*2 - 1, action[1]]
-    end
+    normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
+    # if !isa(action, AbstractArray) 
+    #     action = [T(0.0), action] #only control u_p
+    #     # action = [3.5/env.smax*2 - 1, action]
+    # elseif length(action) == 1
+    #     action = [T(0.0), action[1]] #only control u_p
+    #     # action = [3.5/env.smax*2 - 1, action[1]]
+    # end
     for i in 1:2
 
-        a = action[i]
-        if abs(a) > 1
+        a = normalized_standard_actions[i]
+        if any(abs.(a) .> 1)
             @warn "action $a out of bounds [-1,1]"
         end
         c_prev = c[i]
-        c_hat = a < 0 ? c_prev * (a + 1) : c_prev + (c_max[i] - c_prev) * a
-        # c_hat = c_max[i]*(1+a)/2
-        # if c_hat > c_max[i] || c_hat < 0
-        #     @warn "c_hat $c_hat out of bounds $c_max[$i]"
-        # end
-        c[i] = env.α * c_prev + (1 - env.α) * c_hat
+        c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
+
+        c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
     end
 
     env.prob.cache.s_previous = env.prob.cache.s_current
-    env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_previous = env.prob.cache.u_p_current
+    env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_current = c[2]
 
     @debug "taking action $action at time $(env.t), controls: $prev_controls to $c"
@@ -314,28 +318,34 @@ data = run_policy(policy, env, saves_per_action=10)
 function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
     dt = env.dt
-    N = ceil(env.prob.params.tmax / dt) + 1 |> Int
-
-    ts = Vector{T}(undef, N)
-    ss = Vector{T}(undef, N)
-    u_ps = Vector{T}(undef, N)
-    energy_bal = Vector{T}(undef, N*saves_per_action)
-    chamber_p = Vector{T}(undef, N*saves_per_action)
-    states = Vector{Vector{T}}(undef, N*saves_per_action)
-    state_ts = Vector{T}(undef, N*saves_per_action)
-    rewards = Vector{T}(undef, N)
+    max_steps = ceil(env.prob.params.tmax / dt) + 1 |> Int
+    
+    # Initialize vectors with maximum possible size
+    ts = Vector{T}(undef, max_steps)
+    ss = Vector{T}(undef, max_steps)
+    u_ps = Vector{T}(undef, max_steps)
+    energy_bal = Vector{T}(undef, max_steps*saves_per_action)
+    chamber_p = Vector{T}(undef, max_steps*saves_per_action)
+    states = Vector{Vector{T}}(undef, max_steps*saves_per_action)
+    state_ts = Vector{T}(undef, max_steps*saves_per_action)
+    rewards = Vector{T}(undef, max_steps)
+    
+    step = 0
+    total_state_steps = 0
+    
     function log!(step)
         ts[step] = env.t
-        ss[step] = env.prob.cache.s_current
-        u_ps[step] = env.prob.cache.u_p_current
+        ss[step] = mean(env.prob.cache.s_current)
+        u_ps[step] = mean(env.prob.cache.u_p_current)
         rewards[step] = env.reward
 
         step_states = env.prob.sol.u[2:end]
         step_ts = env.prob.sol.t[2:end]
+        n_states = length(step_states)
 
         # Calculate indices for this step's data
-        start_idx = (step-1)*saves_per_action + 1
-        end_idx = step*saves_per_action
+        start_idx = total_state_steps + 1
+        end_idx = total_state_steps + n_states
         
         # Save states and timestamps
         state_ts[start_idx:end_idx] = step_ts
@@ -345,14 +355,25 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
         energy_bal[start_idx:end_idx] = energy_balance(step_states, env.prob.params)
         chamber_p[start_idx:end_idx] = chamber_pressure(step_states, env.prob.params)
         
+        total_state_steps += n_states
     end
 
-    for step = 1:N
+    while !env.done && step < max_steps
+        step += 1
         action = POMDPs.action(π, observe(env))
-        # @debug "step $step, action $action"
         act!(env, action, saves_per_action=saves_per_action)
         log!(step)
     end
+    
+    # Trim arrays to actual size
+    ts = ts[1:step]
+    ss = ss[1:step]
+    u_ps = u_ps[1:step]
+    rewards = rewards[1:step]
+    energy_bal = energy_bal[1:total_state_steps]
+    chamber_p = chamber_p[1:total_state_steps]
+    state_ts = state_ts[1:total_state_steps]
+    states = states[1:total_state_steps]
 
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states)
 end
@@ -374,7 +395,13 @@ struct ConstantRDEPolicy <: Policy
 end
 
 function POMDPs.action(π::ConstantRDEPolicy, s)
-    return [0, 0]
+    if π.env.action_type isa ScalarAreaScalarPressureAction
+        return [0.0, 0.0]
+    elseif π.env.action_type isa ScalarPressureAction
+        return 0.0
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for ConstantRDEPolicy"
+    end
 end
 
 struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
@@ -391,7 +418,13 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
     t = s[end]
     action1 = sin(π.w_1 * t)
     action2 = sin(π.w_2 * t)
-    return [action1, action2]
+    if π.env.action_type isa ScalarAreaScalarPressureAction 
+        return [action1, action2]
+    elseif π.env.action_type isa ScalarPressureAction
+        return action2
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for SinusoidalRDEPolicy"
+    end
 end
 
 struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
@@ -403,6 +436,7 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
         @assert length(ts) == length(c) "Length of time steps and control actions must be equal"
         @assert all(length(action) == 2 for action in c) "Each control action must have 2 elements"
         @assert issorted(ts) "Time steps must be in ascending order"
+        @assert env.action_type isa ScalarAreaScalarPressureAction "StepwiseRDEPolicy only supports ScalarAreaScalarPressureAction"
         env.α = 0.0 #to assure that get_scaled_control works
         new{T}(env, ts, c)
     end
@@ -446,7 +480,12 @@ function POMDPs.action(π::RandomRDEPolicy, state)
     # Generate two random numbers between -1 and 1
     action1 = 2 * rand() - 1
     action2 = 2 * rand() - 1
-    return [0.0, action2]
+    if π.env.action_type isa ScalarAreaScalarPressureAction
+        return [action1, action2]
+    elseif π.env.action_type isa ScalarPressureAction
+        return action2
+    else
+        @error "Unknown action type $(typeof(π.env.action_type)) for RandomRDEPolicy"
+    end
 end
-
 

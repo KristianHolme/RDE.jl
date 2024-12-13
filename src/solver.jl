@@ -1,23 +1,6 @@
 ω(u, u_c, α) = exp((u - u_c) / α)
 ξ(u, u_0, n) = (u_0 - u) * u^n 
-β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
-
-
-# Add smooth control function
-smooth_f(x::Real) = x > zero(x) ? exp(-1/x) : zero(x)
-smooth_g(x::Real) = smooth_f(x)/(smooth_f(x)+smooth_f(1-x))
-function smooth_control(t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
-    progress = smooth_g((t - control_t)/τ_smooth)
-    return previous_value + (current_value - previous_value) * progress
-    # # Cosine smoothing from previous to current value
-    # if (t - control_t) < τ_smooth
-    #     Δc = current_value - previous_value
-    #     return previous_value + Δc * (0.5 - 0.5*cos(π * (t - control_t)/τ_smooth))
-    # else
-    #     return current_value
-    # end
-end
-
+β(u, s, u_p, k) = s .* u_p ./ (1 .+ exp.(k .* (u .- u_p)))
 
 
 # RHS function for the ODE solver using in-place operations
@@ -53,23 +36,25 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     u_p_t = cache.u_p_t
     s_t = cache.s_t
 
-    # Replace static u_p with smooth time-dependent version
-    u_p_t = smooth_control(t, 
-                    cache.control_time,
-                    cache.u_p_current,
-                    cache.u_p_previous, 
-                    cache.τ_smooth)
-    s_t = smooth_control(t, 
-                    cache.control_time,
-                    cache.s_current,
-                    cache.s_previous, 
-                    cache.τ_smooth)
-    @debug "RHS:u_p_t $u_p_t, s_t $s_t at time $t"
+    # Update control values with smooth transition
+    smooth_control!(u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
+    smooth_control!(s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
+    
+    # Calculate shift based on current time
+    dx = prob.params.L / prob.params.N
+    shift = Int(round(prob.control_shift_func(u, t) / dx))
+    
+    # Apply shifts
+    apply_periodic_shift!(cache.u_p_t_shifted, cache.u_p_t, shift)
+    apply_periodic_shift!(cache.s_t_shifted, cache.s_t, shift)
+    
+    @debug "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
     @debug "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
-    # Compute nonlinear terms using fused broadcasting
+    
+    # Use shifted controls in calculations
     @turbo @. ωu = ω(u, u_c, α)
     @turbo @. ξu = ξ(u, u_0, n)
-    @turbo @. βu = β(u, s_t, u_p_t, k_param)
+    @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
     # Combine both loops to reduce overhead
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu

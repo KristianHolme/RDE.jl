@@ -165,3 +165,41 @@ function get_n_shocks_init_func(n::Int)
     end
     return u_init
 end
+
+"""
+    apply_periodic_shift!(target::AbstractVector, source::AbstractVector, shift::Integer)
+
+Apply a periodic shift to `source` and store the result in `target`.
+Positive shift moves elements to the left (forward in space).
+The operation is performed in-place without allocations.
+
+# Arguments
+- `target`: Vector to store the shifted result
+- `source`: Vector to be shifted
+- `shift`: Number of positions to shift (can be positive or negative)
+"""
+function apply_periodic_shift!(target::AbstractVector, source::AbstractVector, shift::Integer)
+    N = length(source)
+    @assert length(target) == N "target and source must have the same length"
+    
+    # Normalize shift to be within array bounds
+    shift = mod(shift, N)
+    if shift == 0
+        target .= source
+        return target
+    end
+    
+    # Positive shift: move elements left (forward in space)
+    target[1:N-shift] .= @view source[shift+1:N]
+    target[N-shift+1:N] .= @view source[1:shift]
+    
+    return target
+end
+
+# Add smooth control function
+smooth_f(x::Real) = x > zero(x) ? exp(-1/x) : zero(x)
+smooth_g(x::Real) = smooth_f(x)/(smooth_f(x)+smooth_f(1-x))
+function smooth_control!(target, t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
+    progress = smooth_g((t - control_t)/τ_smooth)
+    @turbo @. target = previous_value + (current_value - previous_value) * progress
+end

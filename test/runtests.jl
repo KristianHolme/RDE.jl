@@ -17,4 +17,8 @@ end
     include("types_tests.jl")
 end
 
+@testitem "Actions" begin
+    include("actions_tests.jl")
+end
+
 @run_package_tests
