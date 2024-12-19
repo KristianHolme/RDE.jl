@@ -15,6 +15,8 @@ module RDE
     using POMDPs
     using POMDPTools
     using ProgressMeter
+    using Random
+    using Statistics
     
     using PrecompileTools
     
@@ -27,6 +29,7 @@ module RDE
     export get_n_shocks_init_func
     export get_standard_normalized_actions, AbstractActionType, ScalarPressureAction, 
            VectorPressureAction, ScalarAreaScalarPressureAction
+    export FourierObservation, StateObservation, SampledStateObservation
 
     include("action_types.jl")
     include("structs.jl")

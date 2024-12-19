@@ -3,19 +3,31 @@ abstract type AbstractActionType end
 mutable struct ScalarPressureAction <: AbstractActionType 
     N::Int #number of grid points
 end
-ScalarPressureAction() = ScalarPressureAction(0)  # Default constructor without N
+ScalarPressureAction(;N::Int=0) = ScalarPressureAction(N)
+
+mutable struct ScalarAreaScalarPressureAction <: AbstractActionType 
+    N::Int #number of grid points
+end
+# ScalarAreaScalarPressureAction() = ScalarAreaScalarPressureAction(0) #TODO remove
+ScalarAreaScalarPressureAction(;N::Int=0) = ScalarAreaScalarPressureAction(N)
 
 mutable struct VectorPressureAction <: AbstractActionType 
     number_of_sections::Int #number of sections 
     N::Int #number of grid points
 end
-VectorPressureAction(;number_of_sections=1) = VectorPressureAction(number_of_sections, 0)
+VectorPressureAction(;number_of_sections=1, N=0) = VectorPressureAction(number_of_sections, N)
 
-mutable struct ScalarAreaScalarPressureAction <: AbstractActionType 
-    N::Int #number of grid points
+function n_actions(at::ScalarPressureAction) 
+    return 1
 end
-ScalarAreaScalarPressureAction() = ScalarAreaScalarPressureAction(0)
 
+function n_actions(at::ScalarAreaScalarPressureAction)
+    return 2
+end
+
+function n_actions(at::VectorPressureAction)
+    return at.number_of_sections
+end
 # Helper function to set N for any action type
 function set_N!(action_type::AbstractActionType, N::Int)
     if action_type isa VectorPressureAction

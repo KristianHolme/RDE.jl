@@ -1,17 +1,29 @@
+abstract type AbstractObservationStrategy end
+
+struct FourierObservation <: AbstractObservationStrategy
+    fft_terms::Int
+end
+
+struct StateObservation <: AbstractObservationStrategy end
+
+struct SampledStateObservation <: AbstractObservationStrategy 
+    n_samples::Int
+end
+
 mutable struct RDEEnvCache{T<:AbstractFloat}
     circ_u::CircularVector{T, Vector{T}}
     circ_λ::CircularVector{T, Vector{T}}
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
-    fft_terms::Int  # Number of Fourier terms to keep
-    function RDEEnvCache{T}(N::Int; fft_terms::Int=8) where {T<:AbstractFloat}
-        @assert fft_terms <= N "Number of FFT terms cannot exceed spatial resolution"
+    observation_strategy::AbstractObservationStrategy
+    
+    function RDEEnvCache{T}(N::Int, strategy::AbstractObservationStrategy) where {T<:AbstractFloat}
         return new{T}(
             CircularArray(Vector{T}(undef, N)), 
             CircularArray(Vector{T}(undef, N)),
             Vector{T}(undef, N),
             Vector{T}(undef, N),
-            fft_terms
+            strategy
         )
     end
 end
@@ -26,7 +38,6 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     reward::T
     smax::T
     u_pmax::T
-    observation_samples::Int64
     reward_func::Function
     α::T #action momentum
     τ_smooth::T #smoothing time constant
@@ -36,13 +47,12 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         dt=10.0,
         smax=4.0,
         u_pmax=1.2,
-        observation_samples::Int64=-1,
         params::RDEParam{T}=RDEParam{T}(),
         reward_func::Function=RDE_reward_combined!,
         momentum=0.5,
-        c=0.0,
         τ_smooth=1.25,
         fft_terms::Int=32,
+        observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
         action_type::AbstractActionType=ScalarPressureAction(),
         kwargs...) where {T<:AbstractFloat}
 
@@ -51,11 +61,6 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
             @info "Setting τ_smooth = $(dt/8)"
             τ_smooth = dt/8
         end
-
-        if observation_samples == -1
-            observation_samples = params.N
-        end
-        @assert observation_samples == params.N "observation_samples must be equal to params.N"
 
         prob = RDEProblem(params; kwargs...)
         prob.cache.τ_smooth = τ_smooth
@@ -66,58 +71,55 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         fft_terms = min(fft_terms, params.N ÷ 2)
 
         initial_state = vcat(prob.u0, prob.λ0)
-        init_observation = Vector{T}(undef, fft_terms * 2 + 1)
-        cache = RDEEnvCache{T}(observation_samples; fft_terms=fft_terms)
+        init_observation = init_observation_vector(observation_strategy, params.N)
+        cache = RDEEnvCache{T}(params.N, observation_strategy)
         return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0,
-            smax, u_pmax, observation_samples, reward_func, momentum, τ_smooth, cache, action_type)
+            smax, u_pmax, reward_func, momentum, τ_smooth, cache, action_type)
     end
 end
 
 
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
-RDEEnv(params::RDEParam{T}) where {T<:AbstractFloat} = RDEEnv{T}(params=params)
+RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(params=params, kwargs...)
 
-function interpolate_state(env::RDEEnv)
-    N = env.prob.params.N
-    n = env.observation_samples
-    L = env.prob.params.L
-    dx = n / L
-    xs_sample = LinRange(0.0, L, n + 1)[1:end-1]
-    u = env.state[1:N]
-    λ = env.state[N+1:end]
+# function interpolate_state(env::RDEEnv) #TODO remove
+#     N = env.prob.params.N
+#     n = env.observation_samples
+#     L = env.prob.params.L
+#     dx = n / L
+#     xs_sample = LinRange(0.0, L, n + 1)[1:end-1]
+#     u = env.state[1:N]
+#     λ = env.state[N+1:end]
 
-    itp_u = LinearInterpolation(env.prob.x, u)
-    itp_λ = LinearInterpolation(env.prob.x, λ)
+#     itp_u = LinearInterpolation(env.prob.x, u)
+#     itp_λ = LinearInterpolation(env.prob.x, λ)
 
-    env.observation[1:n] = itp_u(xs_sample)
-    env.observation[n+1:end] = itp_λ(xs_sample)
-    return env.observation
-end
+#     env.observation[1:n] = itp_u(xs_sample)
+#     env.observation[n+1:end] = itp_λ(xs_sample)
+#     return env.observation
+# end
 
 # CommonRLInterface.reward(env::RDEEnv) = env.reward
 CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
 CommonRLInterface.terminated(env::RDEEnv) = env.done
 function CommonRLInterface.observe(env::RDEEnv)
+    return compute_observation(env, env.cache.observation_strategy)
+end
+
+function compute_observation(env::RDEEnv, strategy::FourierObservation)
     N = env.prob.params.N
     
-    # Get current state components
     current_u = @view env.state[1:N]
     current_λ = @view env.state[N+1:end]
     
-    # Calculate state differences
     env.cache.circ_u[:] .= current_u .- env.cache.prev_u
     env.cache.circ_λ[:] .= current_λ .- env.cache.prev_λ
     
-    # Compute FFT and get magnitudes (shift-invariant)
     fft_u = abs.(fft(env.cache.circ_u))
     fft_λ = abs.(fft(env.cache.circ_λ))
     
-    # Keep only first n terms (up to Nyquist frequency)
-    n_terms = min(env.cache.fft_terms, N ÷ 2 + 1)
+    n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     
-    # Normalize FFT coefficients
-    # We can use the DC component (first coefficient) as normalization factor
-    # Adding a small epsilon to avoid division by zero
     ϵ = 1e-8
     norm_factor_u = max(maximum(fft_u), ϵ)
     norm_factor_λ = max(maximum(fft_λ), ϵ)
@@ -125,15 +127,56 @@ function CommonRLInterface.observe(env::RDEEnv)
     u_obs = fft_u[1:n_terms] ./ norm_factor_u
     λ_obs = fft_λ[1:n_terms] ./ norm_factor_λ
     
-    # Add normalized time to observation
     normalized_time = env.t / env.prob.params.tmax
-    
-    # Return concatenated FFT magnitudes and normalized time
     return vcat(u_obs, λ_obs, normalized_time)
 end
 
+function compute_observation(env::RDEEnv, ::StateObservation)
+    # Normalize state components
+    N = length(env.state) ÷ 2
+    u = @view env.state[1:N]
+    λ = @view env.state[N+1:end]
+    
+    # Find normalization factors, avoiding division by zero
+    ϵ = 1e-8
+    u_max = max(maximum(abs.(u)), ϵ)
+    λ_max = max(maximum(abs.(λ)), ϵ)
+    
+    # Create normalized state vector
+    normalized_state = similar(env.state)
+    normalized_state[1:N] = u ./ u_max 
+    normalized_state[N+1:end] = λ ./ λ_max
+    return vcat(normalized_state, env.t / env.prob.params.tmax)
+end
+
+function compute_observation(env::RDEEnv, strategy::SampledStateObservation)
+    N = env.prob.params.N
+    n = strategy.n_samples
+    
+    u = @view env.state[1:N]
+    λ = @view env.state[N+1:end]
+    
+    indices = round.(Int, range(1, N, length=n))
+    sampled_u = u[indices]
+    sampled_λ = λ[indices]
+    
+    normalized_time = env.t / env.prob.params.tmax
+    # Find normalization factors, avoiding division by zero
+    ϵ = 1e-8
+    u_max = max(maximum(abs.(sampled_u)), ϵ)
+    λ_max = max(maximum(abs.(sampled_λ)), ϵ)
+    
+    # Normalize sampled state components
+    sampled_u ./= u_max
+    sampled_λ ./= λ_max
+    return vcat(sampled_u, sampled_λ, normalized_time)
+end
+
+
+
 function CommonRLInterface.actions(env::RDEEnv)
-    return [(-1 .. 1)]
+    n = n_actions(env.action_type)
+    return [(-1 .. 1) for _ in 1:n]
 end
 
 #TODO test that this works
@@ -487,5 +530,18 @@ function POMDPs.action(π::RandomRDEPolicy, state)
     else
         @error "Unknown action type $(typeof(π.env.action_type)) for RandomRDEPolicy"
     end
+end
+
+function init_observation_vector(strategy::FourierObservation, N::Int)
+    n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
+    return Vector{Float32}(undef, n_terms * 2 + 1)
+end
+
+function init_observation_vector(::StateObservation, N::Int)
+    return Vector{Float32}(undef, 2N + 1)
+end
+
+function init_observation_vector(strategy::SampledStateObservation, N::Int)
+    return Vector{Float32}(undef, 2 * strategy.n_samples + 1)
 end
 

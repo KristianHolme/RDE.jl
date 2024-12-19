@@ -1,5 +1,7 @@
-using RDE, Test, TestItems, TestItemRunner, JLD2
-
+using RDE
+using Test
+using TestItems
+using TestItemRunner
 
 @testitem "solver" begin
     include("solver_tests.jl")
