@@ -20,7 +20,7 @@ POMDPs = "a93abf59-7444-517b-a68a-c42f96afdd7d"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Statistics = "1"
 
 [compat]
 CircularArrays = "1.4"
