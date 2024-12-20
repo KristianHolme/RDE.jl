@@ -1,3 +1,26 @@
+"""
+    RDEParam{T<:AbstractFloat}
+
+Parameters for the rotating detonation engine (RDE) model.
+
+# Fields
+- `N::Int`: Number of spatial points
+- `L::T`: Domain length
+- `ν_1::T`: Viscosity coefficient for velocity field
+- `ν_2::T`: Viscosity coefficient for reaction progress
+- `u_c::T`: Parameter in ω(u)
+- `α::T`: Parameter in ω(u)
+- `q_0::T`: Source term coefficient
+- `u_0::T`: Parameter in ξ(u, u_0)
+- `n::Int`: Exponent in ξ(u, u_0)
+- `k_param::T`: Parameter in β(u, s)
+- `u_p::T`: Parameter in β(u, s)
+- `s::T`: Parameter in β(u, s)
+- `ϵ::T`: Small parameter in ξ(u)
+- `tmax::T`: Maximum simulation time
+- `x0::T`: Initial position
+- `saveframes::Int`: Number of time steps to save
+"""
 mutable struct RDEParam{T<:AbstractFloat}
     N::Int               # Number of spatial points
     L::T              # Domain length
@@ -18,6 +41,34 @@ mutable struct RDEParam{T<:AbstractFloat}
 end
 Base.length(params::RDEParam) = 1
 
+"""
+    RDEParam{T}(; kwargs...) where {T<:AbstractFloat}
+
+Construct RDE parameters with specified type T.
+
+# Keywords
+- `N::Int=512`: Number of spatial points
+- `L::T=2π`: Domain length
+- `ν_1::T=0.0075`: Viscosity coefficient for velocity
+- `ν_2::T=0.0075`: Viscosity coefficient for reaction
+- `u_c::T=1.1`: Parameter in ω(u)
+- `α::T=0.3`: Parameter in ω(u)
+- `q_0::T=1.0`: Source term coefficient
+- `u_0::T=0.0`: Parameter in ξ(u, u_0)
+- `n::Int=1`: Exponent in ξ(u, u_0)
+- `k_param::T=5.0`: Parameter in β(u, s)
+- `u_p::T=0.5`: Parameter in β(u, s)
+- `s::T=3.5`: Parameter in β(u, s)
+- `ϵ::T=0.15`: Small parameter in ξ(u)
+- `tmax::T=50.0`: Maximum simulation time
+- `x0::T=1.0`: Initial position
+- `saveframes::Int=75`: Number of time steps to save
+
+# Example
+```julia
+params = RDEParam{Float64}(N=1024, tmax=100.0)
+```
+"""
 function RDEParam{T}(;
     N=512,
     L=2π,
@@ -38,12 +89,47 @@ function RDEParam{T}(;
     RDEParam{T}(N, L, ν_1, ν_2, u_c, α, q_0, u_0, n, k_param, u_p, s, ϵ, tmax, x0, saveframes)
 end
 
+"""
+    RDEParam(; kwargs...)
+
+Construct RDE parameters with default type Float32. See [`RDEParam{T}`](@ref) for available keywords.
+"""
 RDEParam(; kwargs...) = RDEParam{Float32}(; kwargs...)
 
 
 
 abstract type AbstractRDECache{T<:AbstractFloat} end
 
+"""
+    PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+
+Cache for pseudospectral method computations in RDE solver.
+
+# Fields
+## Physical Space Arrays
+- `u_x, u_xx`: Velocity derivatives
+- `λ_xx`: Reaction progress derivatives
+- `ωu, ξu, βu`: Nonlinear terms
+
+## Spectral Space Arrays
+- `u_hat, u_x_hat, u_xx_hat`: Velocity Fourier transforms
+- `λ_hat, λ_xx_hat`: Reaction progress Fourier transforms
+
+## FFT Plans
+- `fft_plan`: Forward FFT plan
+- `ifft_plan`: Inverse FFT plan
+
+## Spectral Operations
+- `dealias_filter`: Dealiasing filter
+- `ik`: Wavenumbers for first derivative
+- `k2`: Wavenumbers for second derivative
+
+## Control Parameters
+- `u_p_current, u_p_previous`: Current and previous pressure values
+- `s_current, s_previous`: Current and previous s parameter values
+- `τ_smooth`: Smoothing time scale
+- `control_time`: Time of last control update
+"""
 mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
@@ -76,21 +162,30 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     s_t_shifted::Vector{T}
 end
 
+"""
+    PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:AbstractFloat}
+
+Construct a cache for pseudospectral method computations.
+
+# Arguments
+- `params::RDEParam{T}`: RDE parameters
+- `dealias::Bool=true`: Whether to apply dealiasing filter
+
+# Returns
+- `PseudospectralRDECache{T}`: Initialized cache for computations
+"""
 function PseudospectralRDECache{T}(params::RDEParam{T}; 
         dealias=true) where {T<:AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
     
-    # Create dealiasing filter
     dealias_filter = if dealias
         create_dealiasing_vector(params)
     else
         ones(T, N_complex)
     end
 
-    # Create spectral derivative arrays
     ik, k2 = create_spectral_derivative_arrays(params)
-
 
     PseudospectralRDECache{T}(
         [Vector{T}(undef, N) for _ in 1:6]...,
@@ -109,6 +204,27 @@ function PseudospectralRDECache{T}(params::RDEParam{T};
     )
 end
 
+"""
+    FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+
+Cache for finite difference method computations in RDE solver.
+
+# Fields
+## Spatial Arrays
+- `u_x, u_xx`: Velocity derivatives
+- `λ_xx`: Reaction progress derivatives
+- `ωu, ξu, βu`: Nonlinear terms
+
+## Grid Parameters
+- `dx`: Grid spacing
+- `N`: Number of grid points
+
+## Control Parameters
+- `u_p_current, u_p_previous`: Current and previous pressure values
+- `s_current, s_previous`: Current and previous s parameter values
+- `τ_smooth`: Smoothing time scale
+- `control_time`: Time of last control update
+"""
 mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
@@ -130,6 +246,18 @@ mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     s_t_shifted::Vector{T}
 end
 
+"""
+    FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+
+Construct a cache for finite difference method computations.
+
+# Arguments
+- `params::RDEParam{T}`: RDE parameters
+- `dx::T`: Grid spacing
+
+# Returns
+- `FDRDECache{T}`: Initialized cache for computations
+"""
 function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
     N = params.N
     FDRDECache{T}(
@@ -154,6 +282,22 @@ function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
     )
 end
 
+"""
+    RDEProblem{T<:AbstractFloat}
+
+Main problem type for the rotating detonation engine solver.
+
+# Fields
+- `params::RDEParam{T}`: Model parameters
+- `u0::Vector{T}`: Initial velocity field
+- `λ0::Vector{T}`: Initial reaction progress
+- `x::Vector{T}`: Spatial grid points
+- `u_init::Function`: Velocity initialization function
+- `λ_init::Function`: Reaction progress initialization function
+- `sol::Union{Nothing, Any}`: Solution (if computed)
+- `cache::AbstractRDECache{T}`: Computation cache
+- `control_shift_func::Function`: Control shift function
+"""
 mutable struct RDEProblem{T<:AbstractFloat}
     params::RDEParam{T}
     u0::Vector{T}
@@ -166,6 +310,24 @@ mutable struct RDEProblem{T<:AbstractFloat}
     control_shift_func::Function
 end
 
+"""
+    RDEProblem(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat}
+
+Construct an RDE problem with given parameters.
+
+# Arguments
+- `params::RDEParam{T}`: Model parameters
+
+# Keywords
+- `u_init::Function = x -> (3/2) .* sech.(x .- 1).^20`: Initial velocity field function
+- `λ_init::Function = x -> 0.5 .* ones(length(x))`: Initial reaction progress function
+- `dealias::Bool = true`: Whether to apply dealiasing (pseudospectral only)
+- `method::Symbol = :fd`: Numerical method (`:fd` or `:pseudospectral`)
+- `control_shift_func::Function = (u, t) -> zero(T)`: Control shift function
+
+# Returns
+- `RDEProblem{T}`: Initialized problem
+"""
 function RDEProblem(params::RDEParam{T};
     u_init = x -> (3 / 2) .* sech.(x .- 1).^20,
     λ_init = x -> 0.5 .* ones(length(x)),
@@ -174,9 +336,7 @@ function RDEProblem(params::RDEParam{T};
     control_shift_func = (u, t) -> zero(T)) where {T<:AbstractFloat}
 
     x = range(0, params.L, length=params.N+1)[1:end-1]
-    dx = x[2] - x[1] #Assuming uniform grid spacing
-    # u0 = u_init.(x, params.x0)
-    # λ0 = λ_init.(x)
+    dx = x[2] - x[1]
 
     cache = if method == :pseudospectral
         PseudospectralRDECache{T}(params, dealias=dealias)
@@ -192,23 +352,35 @@ function RDEProblem(params::RDEParam{T};
     return prob
 end
 
+"""
+    set_init_state!(prob::RDEProblem)
+
+Initialize the state vectors of an RDE problem using the initialization functions.
+"""
 function set_init_state!(prob::RDEProblem)
     prob.u0 = prob.u_init(prob.x)
     prob.λ0 = prob.λ_init(prob.x)
 end
 
+"""
+    create_dealiasing_vector(params::RDEParam{T}) where {T<:AbstractFloat}
+
+Create a 2/3 rule dealiasing filter for pseudospectral computations.
+"""
 function create_dealiasing_vector(params::RDEParam{T}) where {T<:AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
     k = collect(0:N_complex-1)
     k_cutoff = div(N, 3)
-
-    # Construct the dealiasing vector using broadcasting
     dealiasing = @. ifelse(k <= k_cutoff, one(T), zero(T))
-
     return dealiasing
 end
 
+"""
+    create_spectral_derivative_arrays(params::RDEParam{T}) where {T<:AbstractFloat}
+
+Create arrays for spectral derivatives: wavenumbers for first (ik) and second (k2) derivatives.
+"""
 function create_spectral_derivative_arrays(params::RDEParam{T}) where {T<:AbstractFloat}
     N = params.N
     L = params.L

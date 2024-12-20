@@ -1,4 +1,24 @@
-# Plot the solution with interactive controls
+"""
+    plot_solution(prob::RDEProblem; time_idx=Observable(1), player_controls=true)
+
+Plot the solution of an RDE problem with interactive visualization.
+
+# Arguments
+- `prob::RDEProblem`: The RDE problem containing solution data
+
+# Keywords
+- `time_idx::Observable{Int}=Observable(1)`: Observable for current time index
+- `player_controls::Bool=true`: Whether to include playback controls
+
+# Returns
+- `Figure`: Makie figure containing the visualization
+
+The plot includes:
+- Velocity field (u) and reaction progress (λ) in both linear and circular representations
+- Energy balance over time
+- Chamber pressure over time
+- Interactive time controls (if `player_controls=true`)
+"""
 function plot_solution(prob::RDEProblem; 
         time_idx = Observable(1),
         player_controls = true)
@@ -24,7 +44,7 @@ function plot_solution(prob::RDEProblem;
 
     # Add energy_balance_plot
     energy_bal = energy_balance(sol.u, params)
-    ax_eb = Axis(metrics_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_area[1,1], title="Energy balance", xlabel="t", ylabel="Ė")
     lines!(ax_eb, sol.t, energy_bal)
     vlines!(ax_eb, @lift(sol.t[$time_idx]), color=:green, alpha=0.5)
 
@@ -48,6 +68,11 @@ function plot_solution(prob::RDEProblem;
     fig
 end
 
+"""
+    get_u_max(us)
+
+Calculate the maximum velocity across all time steps.
+"""
 function get_u_max(us)
     full_mat = stack(us)
     N = Int(length(us[1]) / 2)
@@ -55,6 +80,24 @@ function get_u_max(us)
     return u_max
 end
 
+"""
+    plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
+
+Add interactive playback controls to a figure.
+
+# Arguments
+- `play_ctrl_area::GridLayout`: Layout area for controls
+- `time_idx::Observable{Int}`: Observable for current time index
+- `num_times::Int`: Total number of time steps
+
+Features:
+- Play/Pause button
+- Step forward/backward buttons
+- Jump to start/end buttons
+- Time slider
+- Animation speed control
+- Loop control
+"""
 function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
     # Slider
     sld = Slider(play_ctrl_area[1,1], range=1:num_times, startvalue=1)
@@ -158,6 +201,22 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     end
 end
 
+"""
+    plot_subfunctions(layout::GridLayout, x, u_data::Observable, params; kwargs...)
+
+Plot auxiliary functions ω(u), ξ(u), and β(u) in a separate layout.
+
+# Arguments
+- `layout::GridLayout`: Layout area for plots
+- `x`: Spatial grid points
+- `u_data::Observable`: Observable containing velocity field
+- `params`: RDE parameters
+
+# Keywords
+- `u_max=Observable(10.0)`: Maximum velocity for scaling
+- `s=Observable(params.s)`: Parameter s in β function
+- `u_p=Observable(params.u_p)`: Parameter u_p in β function
+"""
 function plot_subfunctions(layout::GridLayout, x, u_data::Observable, 
                            params;
                            u_max=Observable(10.0),
@@ -200,6 +259,25 @@ function plot_subfunctions(layout::GridLayout, x, u_data::Observable,
     return [ax_ω, ax_ξ, ax_β]
 end
 
+"""
+    main_plotting(layout::GridLayout, x, u_data::Observable, λ_data::Observable, params; kwargs...)
+
+Create main plots for velocity and reaction progress fields.
+
+# Arguments
+- `layout::GridLayout`: Layout area for plots
+- `x`: Spatial grid points
+- `u_data::Observable`: Observable containing velocity field
+- `λ_data::Observable`: Observable containing reaction progress
+- `params`: RDE parameters
+
+# Keywords
+- `u_max=Observable(10.0)`: Maximum velocity for scaling
+- `s=Observable(params.s)`: Parameter s in β function
+- `u_p=Observable(params.u_p)`: Parameter u_p in β function
+- `show_mouse_vlines::Bool=true`: Whether to show vertical lines at mouse position
+- `include_subfunctions::Bool=false`: Whether to include auxiliary function plots
+"""
 function main_plotting(layout::GridLayout, x, u_data::Observable, 
         λ_data::Observable,
         params; 
@@ -298,11 +376,48 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     end
 end
 
+"""
+    plot_policy(π::P, env::RDEEnv) where P <: Policy
+
+Plot the results of running a policy in an RDE environment.
+
+# Arguments
+- `π::P`: Policy to evaluate
+- `env::RDEEnv`: RDE environment
+
+# Returns
+- `Figure`: Makie figure containing the visualization
+"""
 function plot_policy(π::P, env::RDEEnv) where P <: Policy
     data = run_policy(π, env)
     plot_policy_data(env, data)
 end
 
+"""
+    plot_policy_data(env::RDEEnv, data::PolicyRunData; kwargs...)
+
+Create an interactive visualization of policy execution data.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+- `data::PolicyRunData`: Data from policy execution
+
+# Keywords
+- `time_idx::Observable{Int}=Observable(1)`: Observable for current time index
+- `player_controls::Bool=true`: Whether to include playback controls
+
+# Returns
+- `Figure`: Makie figure containing the visualization
+
+The plot includes:
+- Velocity and reaction progress fields
+- Energy balance
+- Chamber pressure
+- Rewards
+- Number of shocks
+- Control parameters (s and u_p)
+- Interactive time controls (if enabled)
+"""
 function plot_policy_data(env::RDEEnv, data::PolicyRunData; 
         time_idx = Observable(1),
         player_controls=true,
@@ -399,7 +514,26 @@ function plot_policy_data(env::RDEEnv, data::PolicyRunData;
     fig
 end
 
+"""
+    plot_shifted_history(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing)
 
+Create a space-time plot of the solution in a moving reference frame.
+
+# Arguments
+- `us::AbstractArray`: Array of velocity fields
+- `x::AbstractArray`: Spatial grid points
+- `ts::AbstractArray`: Time points
+- `c::Union{Real, AbstractArray}`: Frame velocity (scalar or array)
+
+# Keywords
+- `u_ps=nothing`: Optional array of pressure values to plot
+
+# Returns
+- `Figure`: Makie figure containing:
+  - Heatmap of velocity field in moving frame
+  - Number of shocks over time
+  - Pressure values over time (if provided)
+"""
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
          ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing)
     shifted_us = shift_inds(us, x, ts, c)

@@ -1,15 +1,53 @@
+"""
+    AbstractObservationStrategy
+
+Abstract type for different strategies to observe the RDE system state.
+"""
 abstract type AbstractObservationStrategy end
 
+"""
+    FourierObservation <: AbstractObservationStrategy
+
+Observation strategy using Fourier coefficients of state differences.
+
+# Fields
+- `fft_terms::Int`: Number of Fourier terms to use in observation
+"""
 struct FourierObservation <: AbstractObservationStrategy
     fft_terms::Int
 end
 
+"""
+    StateObservation <: AbstractObservationStrategy
+
+Observation strategy using the full normalized state vector.
+"""
 struct StateObservation <: AbstractObservationStrategy end
 
+"""
+    SampledStateObservation <: AbstractObservationStrategy
+
+Observation strategy using sampled points from the state vector.
+
+# Fields
+- `n_samples::Int`: Number of points to sample from state vector
+"""
 struct SampledStateObservation <: AbstractObservationStrategy 
     n_samples::Int
 end
 
+"""
+    RDEEnvCache{T<:AbstractFloat}
+
+Cache for RDE environment computations and state tracking.
+
+# Fields
+- `circ_u::CircularVector{T}`: Circular buffer for velocity field
+- `circ_λ::CircularVector{T}`: Circular buffer for reaction progress
+- `prev_u::Vector{T}`: Previous velocity field
+- `prev_λ::Vector{T}`: Previous reaction progress
+- `observation_strategy::AbstractObservationStrategy`: Strategy for state observation
+"""
 mutable struct RDEEnvCache{T<:AbstractFloat}
     circ_u::CircularVector{T, Vector{T}}
     circ_λ::CircularVector{T, Vector{T}}
@@ -18,16 +56,60 @@ mutable struct RDEEnvCache{T<:AbstractFloat}
     observation_strategy::AbstractObservationStrategy
     
     function RDEEnvCache{T}(N::Int, strategy::AbstractObservationStrategy) where {T<:AbstractFloat}
-        return new{T}(
-            CircularArray(Vector{T}(undef, N)), 
-            CircularArray(Vector{T}(undef, N)),
-            Vector{T}(undef, N),
-            Vector{T}(undef, N),
-            strategy
-        )
+        # Initialize all arrays with zeros instead of undefined values
+        circ_u = CircularArray(zeros(T, N))
+        circ_λ = CircularArray(zeros(T, N))
+        prev_u = zeros(T, N)
+        prev_λ = zeros(T, N)
+        
+        return new{T}(circ_u, circ_λ, prev_u, prev_λ, strategy)
     end
 end
 
+"""
+    RDEEnv{T<:AbstractFloat} <: AbstractEnv
+
+Reinforcement learning environment for the RDE system.
+
+# Fields
+- `prob::RDEProblem{T}`: Underlying RDE problem
+- `state::Vector{T}`: Current system state
+- `observation::Vector{T}`: Current observation vector
+- `dt::T`: Time step
+- `t::T`: Current time
+- `done::Bool`: Episode termination flag
+- `reward::T`: Current reward
+- `smax::T`: Maximum value for s parameter
+- `u_pmax::T`: Maximum value for u_p parameter
+- `reward_func::Function`: Reward calculation function
+- `α::T`: Action momentum parameter
+- `τ_smooth::T`: Control smoothing time constant
+- `cache::RDEEnvCache{T}`: Environment cache
+- `action_type::AbstractActionType`: Type of control actions
+
+# Constructor
+```julia
+RDEEnv{T}(;
+    dt=10.0,
+    smax=4.0,
+    u_pmax=1.2,
+    params::RDEParam{T}=RDEParam{T}(),
+    reward_func::Function=RDE_reward_combined!,
+    momentum=0.5,
+    τ_smooth=1.25,
+    fft_terms::Int=32,
+    observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
+    action_type::AbstractActionType=ScalarPressureAction(),
+    kwargs...
+) where {T<:AbstractFloat}
+```
+
+# Example
+```julia
+env = RDEEnv(dt=5.0, smax=3.0)
+env = RDEEnv(params=custom_params, reward_func=custom_reward)
+```
+"""
 mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     prob::RDEProblem{T}                  # RDE problem
     state::Vector{T}
@@ -78,33 +160,32 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     end
 end
 
+"""
+    RDEEnv(; kwargs...)
+
+Construct an RDEEnv with Float32 precision.
+"""
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
+
+"""
+    RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat}
+
+Construct an RDEEnv with specified parameters and precision.
+"""
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
-# function interpolate_state(env::RDEEnv) #TODO remove
-#     N = env.prob.params.N
-#     n = env.observation_samples
-#     L = env.prob.params.L
-#     dx = n / L
-#     xs_sample = LinRange(0.0, L, n + 1)[1:end-1]
-#     u = env.state[1:N]
-#     λ = env.state[N+1:end]
+"""
+    compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where {T}
 
-#     itp_u = LinearInterpolation(env.prob.x, u)
-#     itp_λ = LinearInterpolation(env.prob.x, λ)
+Compute observation using Fourier coefficients of state differences.
 
-#     env.observation[1:n] = itp_u(xs_sample)
-#     env.observation[n+1:end] = itp_λ(xs_sample)
-#     return env.observation
-# end
+# Arguments
+- `env::RDEEnv{T}`: RDE environment
+- `strategy::FourierObservation`: Fourier observation strategy
 
-# CommonRLInterface.reward(env::RDEEnv) = env.reward
-CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
-CommonRLInterface.terminated(env::RDEEnv) = env.done
-function CommonRLInterface.observe(env::RDEEnv)
-    return compute_observation(env, env.cache.observation_strategy)
-end
-
+# Returns
+- Vector containing normalized Fourier coefficients and time
+"""
 function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where {T}
     N = env.prob.params.N
     
@@ -130,24 +211,45 @@ function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where
     return vcat(u_obs, λ_obs, normalized_time)
 end
 
+"""
+    compute_observation(env::RDEEnv, ::StateObservation)
+
+Compute observation using full normalized state vector.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+- `::StateObservation`: State observation strategy
+
+# Returns
+- Vector containing normalized state and time
+"""
 function compute_observation(env::RDEEnv, ::StateObservation)
-    # Normalize state components
     N = length(env.state) ÷ 2
     u = @view env.state[1:N]
     λ = @view env.state[N+1:end]
     
-    # Find normalization factors, avoiding division by zero
     ϵ = 1e-8
     u_max = max(maximum(abs.(u)), ϵ)
     λ_max = max(maximum(abs.(λ)), ϵ)
     
-    # Create normalized state vector
     normalized_state = similar(env.state)
     normalized_state[1:N] = u ./ u_max 
     normalized_state[N+1:end] = λ ./ λ_max
     return vcat(normalized_state, env.t / env.prob.params.tmax)
 end
 
+"""
+    compute_observation(env::RDEEnv, strategy::SampledStateObservation)
+
+Compute observation using sampled points from state vector.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+- `strategy::SampledStateObservation`: Sampled state observation strategy
+
+# Returns
+- Vector containing normalized sampled state points and time
+"""
 function compute_observation(env::RDEEnv, strategy::SampledStateObservation)
     N = env.prob.params.N
     n = strategy.n_samples
@@ -160,66 +262,33 @@ function compute_observation(env::RDEEnv, strategy::SampledStateObservation)
     sampled_λ = λ[indices]
     
     normalized_time = env.t / env.prob.params.tmax
-    # Find normalization factors, avoiding division by zero
     ϵ = 1e-8
     u_max = max(maximum(abs.(sampled_u)), ϵ)
     λ_max = max(maximum(abs.(sampled_λ)), ϵ)
     
-    # Normalize sampled state components
     sampled_u ./= u_max
     sampled_λ ./= λ_max
     return vcat(sampled_u, sampled_λ, normalized_time)
 end
 
+"""
+    CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
 
+Take an action in the environment.
 
-function CommonRLInterface.actions(env::RDEEnv)
-    n = n_actions(env.action_type)
-    return [(-1 .. 1) for _ in 1:n]
-end
+# Arguments
+- `env::RDEEnv{T}`: RDE environment
+- `action`: Control action to take
+- `saves_per_action::Int=0`: Number of intermediate saves per action
 
-#TODO test that this works
-function CommonRLInterface.clone(env::RDEEnv)
-    env2 = deepcopy(env)
-    @debug "env is copied!"
-    return env2
-end
+# Returns
+- Current reward
 
-function CommonRLInterface.setstate!(env::RDEEnv, s)
-    env.state = s[1:end-1]
-    env.t = s[end]
-end
-
-function POMDPs.initialobs(RLEnvPOMDP, s)
-    return [CommonRLInterface.observe(RLEnvPOMDP.env)]
-end
-
-
-function CommonRLInterface.reset!(env::RDEEnv)
-    # if env.t > 0 && env.t < 40
-    #     error("resetting early?")
-    # end
-    env.t = 0
-    set_init_state!(env.prob)
-    env.state = vcat(env.prob.u0, env.prob.λ0)
-    env.reward = 0.0
-    env.done = false
-    env.reward_func(env)
-
-    env.prob.cache.τ_smooth = env.τ_smooth
-    env.prob.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
-    env.prob.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
-    env.prob.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
-
-    # Initialize previous state
-    N = env.prob.params.N
-    env.cache.prev_u .= @view env.state[1:N]
-    env.cache.prev_λ .= @view env.state[N+1:end]
-    
-    nothing
-end
-
+# Notes
+- Updates environment state and reward
+- Handles smooth control transitions
+- Supports multiple action types
+"""
 function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
     # Store current state before taking action
     N = env.prob.params.N
@@ -227,7 +296,6 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     env.cache.prev_λ .= @view env.state[N+1:end]
 
     t_span = (env.t, env.t + env.dt)
-
     env.prob.cache.control_time = env.t
 
     prev_controls = [env.prob.cache.s_current, env.prob.cache.u_p_current]
@@ -235,22 +303,14 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     c_max = [env.smax, env.u_pmax]
 
     normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
-    # if !isa(action, AbstractArray) 
-    #     action = [T(0.0), action] #only control u_p
-    #     # action = [3.5/env.smax*2 - 1, action]
-    # elseif length(action) == 1
-    #     action = [T(0.0), action[1]] #only control u_p
-    #     # action = [3.5/env.smax*2 - 1, action[1]]
-    # end
+    
     for i in 1:2
-
         a = normalized_standard_actions[i]
         if any(abs.(a) .> 1)
             @warn "action $a out of bounds [-1,1]"
         end
         c_prev = c[i]
         c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
-
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
     end
 
@@ -263,7 +323,6 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
 
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
     
-    # Determine solver settings based on extra_saves_per_step
     if saves_per_action == 0
         sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
     else
@@ -288,7 +347,18 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     return env.reward
 end
 
-function RDE_reward_max!(env::RDEEnv) #just to have something
+"""
+    RDE_reward_max!(env::RDEEnv)
+
+Simple reward function based on maximum velocity.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+
+# Effects
+- Sets env.reward to maximum velocity value
+"""
+function RDE_reward_max!(env::RDEEnv)
     prob = env.prob
     N = prob.params.N
     u = env.state[1:N]
@@ -296,25 +366,43 @@ function RDE_reward_max!(env::RDEEnv) #just to have something
     nothing
 end
 
+"""
+    RDE_reward_energy_balance!(env::RDEEnv)
+
+Reward function based on energy balance.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+
+# Effects
+- Sets env.reward to negative energy balance
+"""
 function RDE_reward_energy_balance!(env::RDEEnv)
     env.reward = -1 * energy_balance(env.state, env.prob.params)
     nothing
 end
 
+"""
+    RDE_reward_combined!(env::RDEEnv)
+
+Combined reward function considering multiple objectives.
+
+# Arguments
+- `env::RDEEnv`: RDE environment
+
+# Effects
+- Sets env.reward based on:
+  - Chamber pressure (weighted 0.4)
+  - Energy balance (weighted 0.6)
+  - Velocity amplitude ratio (weighted 1.0)
+"""
 function RDE_reward_combined!(env::RDEEnv)
     prob = env.prob
     params = prob.params
 
-    # Calculate energy balance
     energy_bal = energy_balance(env.state, params)
-
-    # Calculate chamber pressure using the function from utils.jl
     pressure = chamber_pressure(env.state, params)
 
-    # Combine rewards
-    # We want to maximize chamber pressure and minimize energy imbalance
-    # The negative sign for energy_bal is because we want to minimize it
-    # The weights can be adjusted based on the relative importance of each component
     weight_energy = 0.6
     weight_pressure = 0.4
     weight_span = 1.0
@@ -328,9 +416,98 @@ function RDE_reward_combined!(env::RDEEnv)
     nothing
 end
 
+# CommonRLInterface implementations
+CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
+CommonRLInterface.terminated(env::RDEEnv) = env.done
+function CommonRLInterface.observe(env::RDEEnv)
+    return compute_observation(env, env.cache.observation_strategy)
+end
+
+function CommonRLInterface.actions(env::RDEEnv)
+    n = n_actions(env.action_type)
+    return [(-1 .. 1) for _ in 1:n]
+end
+
+function CommonRLInterface.clone(env::RDEEnv)
+    env2 = deepcopy(env)
+    @debug "env is copied!"
+    return env2
+end
+
+function CommonRLInterface.setstate!(env::RDEEnv, s)
+    env.state = s[1:end-1]
+    env.t = s[end]
+end
+
+function POMDPs.initialobs(RLEnvPOMDP, s)
+    return [CommonRLInterface.observe(RLEnvPOMDP.env)]
+end
 
 """
-    run_policy(π::Policy, env::RDEEnv{T}; sparse_skip=1, tmax=26.0, overacting=1) where {T}
+    CommonRLInterface.reset!(env::RDEEnv)
+
+Reset the environment to its initial state.
+
+# Arguments
+- `env::RDEEnv`: Environment to reset
+
+# Effects
+- Resets time to 0
+- Resets state to initial conditions
+- Resets reward to 0
+- Resets control parameters to initial values
+- Initializes previous state tracking
+"""
+function CommonRLInterface.reset!(env::RDEEnv)
+    env.t = 0
+    set_init_state!(env.prob)
+    env.state = vcat(env.prob.u0, env.prob.λ0)
+    env.reward = 0.0
+    env.done = false
+    env.reward_func(env)
+
+    env.prob.cache.τ_smooth = env.τ_smooth
+    env.prob.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.cache.u_p_current = fill(env.prob.params.u_p, env.prob.params.N)
+    env.prob.cache.s_previous = fill(env.prob.params.s, env.prob.params.N)
+    env.prob.cache.s_current = fill(env.prob.params.s, env.prob.params.N)
+
+    # Initialize previous state
+    N = env.prob.params.N
+    env.cache.prev_u .= @view env.state[1:N]
+    env.cache.prev_λ .= @view env.state[N+1:end]
+    
+    nothing
+end
+
+"""
+    PolicyRunData{T<:AbstractFloat}
+
+Container for data collected during policy execution.
+
+# Fields
+- `action_ts::Vector{T}`: Time points for actions
+- `ss::Vector{T}`: Control parameter s at each action
+- `u_ps::Vector{T}`: Control parameter u_p at each action
+- `rewards::Vector{T}`: Rewards at each action
+- `energy_bal::Vector{T}`: Energy balance at each state
+- `chamber_p::Vector{T}`: Chamber pressure at each state
+- `state_ts::Vector{T}`: Time points for states
+- `states::Vector{Vector{T}}`: States at each time point
+"""
+struct PolicyRunData{T<:AbstractFloat}
+    action_ts::Vector{T} #time points for actions
+    ss::Vector{T} #control parameter s at each action
+    u_ps::Vector{T} #control parameter u_p at each action
+    rewards::Vector{T} #rewards at each action
+    energy_bal::Vector{T} #energy balance at each state
+    chamber_p::Vector{T} #chamber pressure at each state
+    state_ts::Vector{T} #time points for states
+    states::Vector{Vector{T}} #states at each time point
+end
+
+"""
+    run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
 
 Run a policy `π` on the RDE environment and collect trajectory data.
 
@@ -351,26 +528,34 @@ Run a policy `π` on the RDE environment and collect trajectory data.
 - `states`: Full system state at each time point
 
 # Example
-´´´julia
+```julia
 env = RDEEnv()
 policy = ConstantRDEPolicy(env)
 data = run_policy(policy, env, saves_per_action=10)
-´´´
+```
 """
 function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     reset!(env)
     dt = env.dt
     max_steps = ceil(env.prob.params.tmax / dt) + 1 |> Int
     
-    # Initialize vectors with maximum possible size
+    # Initialize vectors for action data
     ts = Vector{T}(undef, max_steps)
     ss = Vector{T}(undef, max_steps)
     u_ps = Vector{T}(undef, max_steps)
-    energy_bal = Vector{T}(undef, max_steps*saves_per_action)
-    chamber_p = Vector{T}(undef, max_steps*saves_per_action)
-    states = Vector{Vector{T}}(undef, max_steps*saves_per_action)
-    state_ts = Vector{T}(undef, max_steps*saves_per_action)
     rewards = Vector{T}(undef, max_steps)
+    
+    # For saves_per_action > 0, we need more space for state data
+    max_state_points = if saves_per_action == 0
+        max_steps  # Only save at action points
+    else
+        max_steps * (saves_per_action + 1)  # +1 to account for potential extra points
+    end
+    
+    energy_bal = Vector{T}(undef, max_state_points)
+    chamber_p = Vector{T}(undef, max_state_points)
+    states = Vector{Vector{T}}(undef, max_state_points)
+    state_ts = Vector{T}(undef, max_state_points)
     
     step = 0
     total_state_steps = 0
@@ -389,13 +574,24 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
         start_idx = total_state_steps + 1
         end_idx = total_state_steps + n_states
         
+        # Ensure we have enough space
+        if end_idx > max_state_points
+            # Extend arrays if needed
+            new_size = end_idx + max_steps * (saves_per_action + 1)
+            resize!(energy_bal, new_size)
+            resize!(chamber_p, new_size)
+            resize!(states, new_size)
+            resize!(state_ts, new_size)
+            max_state_points = new_size
+        end
+        
         # Save states and timestamps
         state_ts[start_idx:end_idx] = step_ts
         states[start_idx:end_idx] = step_states
         
         # Save energy balance and chamber pressure
-        energy_bal[start_idx:end_idx] = energy_balance(step_states, env.prob.params)
-        chamber_p[start_idx:end_idx] = chamber_pressure(step_states, env.prob.params)
+        energy_bal[start_idx:end_idx] = energy_balance.(step_states, Ref(env.prob.params))
+        chamber_p[start_idx:end_idx] = chamber_pressure.(step_states, Ref(env.prob.params))
         
         total_state_steps += n_states
     end
@@ -420,17 +616,18 @@ function run_policy(π::Policy, env::RDEEnv{T}; saves_per_action=1) where {T}
     return PolicyRunData{T}(ts, ss, u_ps, rewards, energy_bal, chamber_p, state_ts, states)
 end
 
-struct PolicyRunData{T<:AbstractFloat}
-    action_ts::Vector{T} #time points for actions
-    ss::Vector{T} #control parameter s at each action
-    u_ps::Vector{T} #control parameter u_p at each action
-    rewards::Vector{T} #rewards at each action
-    energy_bal::Vector{T} #energy balance at each state
-    chamber_p::Vector{T} #chamber pressure at each state
-    state_ts::Vector{T} #time points for states
-    states::Vector{Vector{T}} #states at each time point
-end
+"""
+    ConstantRDEPolicy <: Policy
 
+Policy that maintains constant control values.
+
+# Fields
+- `env::RDEEnv`: RDE environment
+
+# Notes
+Returns [0.0, 0.0] for ScalarAreaScalarPressureAction
+Returns 0.0 for ScalarPressureAction
+"""
 struct ConstantRDEPolicy <: Policy
     env::RDEEnv
     ConstantRDEPolicy(env::RDEEnv=RDEEnv()) = new(env)
@@ -446,6 +643,21 @@ function POMDPs.action(π::ConstantRDEPolicy, s)
     end
 end
 
+"""
+    SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
+
+Policy that applies sinusoidal control signals.
+
+# Fields
+- `env::RDEEnv{T}`: RDE environment
+- `w_1::T`: Phase speed parameter for first action
+- `w_2::T`: Phase speed parameter for second action
+
+# Constructor
+```julia
+SinusoidalRDEPolicy(env::RDEEnv{T}; w_1::T=1.0, w_2::T=2.0) where {T<:AbstractFloat}
+```
+"""
 struct SinusoidalRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     w_1::T  # Phase speed parameter for first action
@@ -469,6 +681,21 @@ function POMDPs.action(π::SinusoidalRDEPolicy, s)
     end
 end
 
+"""
+    StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
+
+Policy that applies predefined control values at specified times.
+
+# Fields
+- `env::RDEEnv{T}`: RDE environment
+- `ts::Vector{T}`: Vector of time steps
+- `c::Vector{Vector{T}}`: Vector of control actions
+
+# Notes
+- Only supports ScalarAreaScalarPressureAction
+- Requires sorted time steps
+- Each control action must have 2 elements
+"""
 struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
     ts::Vector{T}  # Vector of time steps
@@ -484,28 +711,23 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
     end
 end
 
-function POMDPs.action(π::StepwiseRDEPolicy, state)
-    t = state[end]
-    controls = π.c
-    s = π.env.prob.cache.s_current
-    u_p = π.env.prob.cache.u_p_current
-    
-    idx = searchsortedlast(π.ts, t)
-    @debug "t = $t, s = $s, u_p = $u_p, idx = $idx"
+"""
+    get_scaled_control(current, max_val, target)
 
-    if idx == 0
-        return [0.0, 0.0]  # Default action before the first time step
-    else
-        a = zeros(2)
-        a[1] = get_scaled_control(s, π.env.smax, controls[idx][1])
-        a[2] = get_scaled_control(u_p, π.env.u_pmax, controls[idx][2])
-        return a
-    end
-end
+Scale control value to [-1, 1] range based on current value and target.
 
+# Arguments
+- `current`: Current control value
+- `max_val`: Maximum allowed value
+- `target`: Target control value
 
+# Returns
+Scaled control value in [-1, 1]
+
+# Notes
+Assumes zero momentum (env.α = 0)
+"""
 function get_scaled_control(current, max_val, target)
-    #assumes env.momentum == 0
     if target < current
         return target / current - 1.0
     else
@@ -513,13 +735,22 @@ function get_scaled_control(current, max_val, target)
     end
 end
 
+"""
+    RandomRDEPolicy{T<:AbstractFloat} <: Policy
 
+Policy that applies random control values.
+
+# Fields
+- `env::RDEEnv{T}`: RDE environment
+
+# Notes
+Generates random values in [-1, 1] for each control dimension
+"""
 struct RandomRDEPolicy{T<:AbstractFloat} <: Policy
     env::RDEEnv{T}
 end
 
 function POMDPs.action(π::RandomRDEPolicy, state)
-    # Generate two random numbers between -1 and 1
     action1 = 2 * rand() - 1
     action2 = 2 * rand() - 1
     if π.env.action_type isa ScalarAreaScalarPressureAction
@@ -531,6 +762,18 @@ function POMDPs.action(π::RandomRDEPolicy, state)
     end
 end
 
+"""
+    init_observation_vector(strategy::AbstractObservationStrategy, N::Int)
+
+Initialize observation vector for given strategy.
+
+# Arguments
+- `strategy`: Observation strategy
+- `N`: Number of grid points
+
+# Returns
+Preallocated vector for observations
+"""
 function init_observation_vector(strategy::FourierObservation, N::Int)
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     return Vector{Float32}(undef, n_terms * 2 + 1)
