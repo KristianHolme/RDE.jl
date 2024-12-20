@@ -104,7 +104,7 @@ end
 
         # Test for Float64
         @test begin
-            env = RDEEnv(params=RDEParam{Float64}())
+            env = RDEEnv(RDEParam{Float64}())
             obs = CommonRLInterface.observe(env)
             eltype(obs) == Float64
         end

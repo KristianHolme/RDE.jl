@@ -78,9 +78,8 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     end
 end
 
-
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
-RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(params=params, kwargs...)
+RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
 # function interpolate_state(env::RDEEnv) #TODO remove
 #     N = env.prob.params.N
@@ -106,7 +105,7 @@ function CommonRLInterface.observe(env::RDEEnv)
     return compute_observation(env, env.cache.observation_strategy)
 end
 
-function compute_observation(env::RDEEnv, strategy::FourierObservation)
+function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where {T}
     N = env.prob.params.N
     
     current_u = @view env.state[1:N]
@@ -120,7 +119,7 @@ function compute_observation(env::RDEEnv, strategy::FourierObservation)
     
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     
-    ϵ = 1e-8
+    ϵ = T(1e-8)
     norm_factor_u = max(maximum(fft_u), ϵ)
     norm_factor_λ = max(maximum(fft_λ), ϵ)
     
