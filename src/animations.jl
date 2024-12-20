@@ -1,5 +1,3 @@
-using ProgressMeter
-
 function animate_policy(π::P, env::RDEEnv; kwargs...) where P <: Policy
     data = run_policy(π, env;)
     animate_policy_data(data, env; kwargs...)

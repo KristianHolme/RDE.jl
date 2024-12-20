@@ -1,38 +1,114 @@
-# RDE
+# RDE.jl
 
 [![Build Status](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-This package provides a solver for the rotating detonation engine (RDE) model equations presented in [References](#references):
+## Overview
 
-$u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)$
+RDE.jl provides a solver for the rotating detonation engine (RDE) model equations presented in [Koch et al. (2020)](#references):
 
-$\lambda_t = (1-\lambda)\omega(u) - \beta (u, u_p, s)\lambda + \nu_{2}\lambda_{xx}$.
+```math
+u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)
+```
+```math
+\lambda_t = (1-\lambda)\omega(u) - \beta (u, u_p, s)\lambda + \nu_{2}\lambda_{xx}
+```
 
-The solver can use different methods for the spatial discretization. The default is a finite difference method, but a pseudospectral method is also available.
+## Features
 
-This package also provides an interface to the PDE solver using [CommonRLInterface.jl](https://github.com/JuliaReinforcementLearning/CommonRLInterface.jl).
+- **Multiple Discretization Methods**: Supports both finite difference and pseudospectral methods for spatial discretization
+- **Reinforcement Learning Interface**: Integration with [CommonRLInterface.jl](https://github.com/JuliaReinforcementLearning/CommonRLInterface.jl)
+  - Various observation strategies (direct state, Fourier-based)
+  - Flexible action spaces (scalar pressure, stepwise control)
+  - Customizable reward functions
+  - Interactive control capabilities
 
-# Examples
+## Installation
 
-A [Stepwise control](examples/stepwise_control.jl) can be used to control the RDE, and induce bifurcations between different mode-locked states. Visualization of the simulation are mad using [Makie.jl](https://github.com/JuliaPlots/Makie.jl):
+You can install RDE.jl using Julia's built-in package manager. From the Julia REPL, type `]` to enter the Pkg REPL mode and run:
+
+```julia
+pkg> add https://github.com/KristianHolme/RDE.jl
+```
+
+Or, you can use the Pkg API from the Julia REPL:
+
+```julia
+using Pkg
+Pkg.add(url="https://github.com/KristianHolme/RDE.jl")
+```
+
+## Examples
+
+### Basic Usage
+
+### PDE Solving
 ```julia
 using RDE
 using GLMakie
 
-env = RDEEnv(dt=0.1f0);
-π = StepwiseRDEPolicy(env, [20.0f0, 100.0f0, 200.0f0, 350.0f0], 
-[[3.5f0, 0.64f0], [3.5f0, 0.86f0], [3.5f0, 0.64f0], [3.5f0, 0.94f0]]);
-data = run_policy(π, env; tmax=500.0)
-fig = plot_policy_data(env, data)
-
-animate_policy_data(data, env; fname="stepwise_control", fps=60)
+# Create and solve a basic RDE problem
+params = RDEParam()
+rde_prob = RDEProblem(params)
+solve_pde!(rde_prob)
+plot_solution(rde_prob)
 ```
 
+### Stepwise Control
+```julia
+# Initialize environment with parameters
+env = RDEEnv(RDEParam(tmax=500.0), dt=20.0f0)
 
+# Create stepwise policy
+π = StepwiseRDEPolicy(env, 
+    [20.0f0, 100.0f0, 200.0f0, 350.0f0],  # Time points
+    [[3.5f0, 0.64f0],                      # Control values
+     [3.5f0, 0.86f0], 
+     [3.5f0, 0.64f0], 
+     [3.5f0, 0.94f0]])
+
+# Run simulation
+data = run_policy(π, env)
+fig = plot_policy_data(env, data)
+
+# Create animation
+animate_policy_data(data, env; fname="stepwise_control", fps=60)
+```
 https://github.com/user-attachments/assets/154fcc8c-82f1-4158-95ff-5928c8c30e51
 
 
-# References
+
+### Interactive Control
+```julia
+using RDE, GLMakie
+
+# Launch interactive control interface
+env, fig = interactive_control(params=RDEParam())
+```
+
+### Reinforcement Learning
+```julia
+using RDE, POMDPs, POMDPTools, Crux
+
+# Setup environment
+params = RDEParam(tmax=2400.0)
+env = RDEEnv(params=params)
+
+# Convert to MDP for RL
+mdp = convert(POMDP, env)
+
+# Define custom reward function
+function custom_reward!(env::RDEEnv)
+    target = 0.64f0
+    env.reward = -abs(target - env.prob.cache.u_p_current) + 1.0f0
+    nothing
+end
+env.reward_func = custom_reward!
+```
+
+
+
+## References
+
 ```bibtex
 @article{PhysRevE.101.013106,
   title = {Mode-locked rotating detonation waves: Experiments and a model equation},

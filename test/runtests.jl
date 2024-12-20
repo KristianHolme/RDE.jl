@@ -1,5 +1,7 @@
-using RDE, Test, TestItems, TestItemRunner
-
+using RDE
+using Test
+using TestItems
+using TestItemRunner
 
 @testitem "solver" begin
     include("solver_tests.jl")
@@ -15,6 +17,14 @@ end
 
 @testitem "Types" begin
     include("types_tests.jl")
+end
+
+@testitem "Actions" begin
+    include("actions_tests.jl")
+end
+
+@testitem "Policies" begin
+    include("policy_tests.jl")
 end
 
 @run_package_tests
