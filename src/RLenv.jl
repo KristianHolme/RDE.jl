@@ -131,7 +131,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         u_pmax=1.2,
         params::RDEParam{T}=RDEParam{T}(),
         reward_func::Function=RDE_reward_combined!,
-        momentum=0.5,
+        momentum=0.0,
         τ_smooth=1.25,
         fft_terms::Int=32,
         observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
