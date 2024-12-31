@@ -36,6 +36,29 @@ struct SampledStateObservation <: AbstractObservationStrategy
     n_samples::Int
 end
 
+abstract type AbstractRDEReward end
+
+struct ShockSpanReward <: AbstractRDEReward 
+    target_shock_count::Int
+    span_scale::Float32
+    shock_weight::Float32
+    function ShockSpanReward(;target_shock_count::Int=3, span_scale::Float32=4.0f0, shock_weight::Float32=5.0f0)
+        return new(target_shock_count, span_scale, shock_weight)
+    end
+end
+
+struct ShockPreservingReward <: AbstractRDEReward 
+    target_shock_count::Int
+    span_scale::Float32
+    shock_weight::Float32
+    function ShockPreservingReward(;target_shock_count::Int=3, span_scale::Float32=4.0f0, shock_weight::Float32=8.0f0)
+        return new(target_shock_count, span_scale, shock_weight)
+    end
+end
+
+
+
+
 """
     RDEEnvCache{T<:AbstractFloat}
 
@@ -46,23 +69,21 @@ Cache for RDE environment computations and state tracking.
 - `circ_λ::CircularVector{T}`: Circular buffer for reaction progress
 - `prev_u::Vector{T}`: Previous velocity field
 - `prev_λ::Vector{T}`: Previous reaction progress
-- `observation_strategy::AbstractObservationStrategy`: Strategy for state observation
 """
 mutable struct RDEEnvCache{T<:AbstractFloat}
     circ_u::CircularVector{T, Vector{T}}
     circ_λ::CircularVector{T, Vector{T}}
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
-    observation_strategy::AbstractObservationStrategy
     
-    function RDEEnvCache{T}(N::Int, strategy::AbstractObservationStrategy) where {T<:AbstractFloat}
+    function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
         # Initialize all arrays with zeros instead of undefined values
         circ_u = CircularArray(zeros(T, N))
         circ_λ = CircularArray(zeros(T, N))
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
         
-        return new{T}(circ_u, circ_λ, prev_u, prev_λ, strategy)
+        return new{T}(circ_u, circ_λ, prev_u, prev_λ)
     end
 end
 
@@ -81,12 +102,12 @@ Reinforcement learning environment for the RDE system.
 - `reward::T`: Current reward
 - `smax::T`: Maximum value for s parameter
 - `u_pmax::T`: Maximum value for u_p parameter
-- `reward_func::Function`: Reward calculation function
 - `α::T`: Action momentum parameter
 - `τ_smooth::T`: Control smoothing time constant
 - `cache::RDEEnvCache{T}`: Environment cache
 - `action_type::AbstractActionType`: Type of control actions
-
+- `reward_type::AbstractRDEReward`: Type of reward function
+- `verbose::Bool`: Control solver output
 # Constructor
 ```julia
 RDEEnv{T}(;
@@ -94,12 +115,13 @@ RDEEnv{T}(;
     smax=4.0,
     u_pmax=1.2,
     params::RDEParam{T}=RDEParam{T}(),
-    reward_func::Function=RDE_reward_combined!,
     momentum=0.5,
     τ_smooth=1.25,
     fft_terms::Int=32,
     observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
     action_type::AbstractActionType=ScalarPressureAction(),
+    reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
+    verbose::Bool=true,
     kwargs...
 ) where {T<:AbstractFloat}
 ```
@@ -107,7 +129,6 @@ RDEEnv{T}(;
 # Example
 ```julia
 env = RDEEnv(dt=5.0, smax=3.0)
-env = RDEEnv(params=custom_params, reward_func=custom_reward)
 ```
 """
 mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
@@ -117,25 +138,29 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     dt::T                       # time step
     t::T                        # Current time
     done::Bool                        # Termination flag
+    truncated::Bool
     reward::T
     smax::T
     u_pmax::T
-    reward_func::Function
     α::T #action momentum
     τ_smooth::T #smoothing time constant
     cache::RDEEnvCache{T}
     action_type::AbstractActionType
+    observation_strategy::AbstractObservationStrategy
+    reward_type::AbstractRDEReward
+    verbose::Bool               # Control solver output
     function RDEEnv{T}(;
-        dt=10.0,
+        dt=1.0,
         smax=4.0,
         u_pmax=1.2,
         params::RDEParam{T}=RDEParam{T}(),
-        reward_func::Function=RDE_reward_combined!,
         momentum=0.0,
-        τ_smooth=1.25,
-        fft_terms::Int=32,
+        τ_smooth=0.1,
+        fft_terms::Int=16,
         observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
         action_type::AbstractActionType=ScalarPressureAction(),
+        reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
+        verbose::Bool=true,
         kwargs...) where {T<:AbstractFloat}
 
         if τ_smooth > dt
@@ -154,9 +179,12 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
 
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = init_observation_vector(observation_strategy, params.N)
-        cache = RDEEnvCache{T}(params.N, observation_strategy)
-        return new{T}(prob, initial_state, init_observation, dt, 0.0, false, 0.0,
-            smax, u_pmax, reward_func, momentum, τ_smooth, cache, action_type)
+        cache = RDEEnvCache{T}(params.N)
+        return new{T}(prob, initial_state, init_observation,
+                      dt, 0.0, false, false, 0.0, smax, u_pmax,
+                      momentum, τ_smooth, cache,
+                      action_type, observation_strategy, 
+                      reward_type, verbose)
     end
 end
 
@@ -192,8 +220,8 @@ function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where
     current_u = @view env.state[1:N]
     current_λ = @view env.state[N+1:end]
     
-    env.cache.circ_u[:] .= current_u .- env.cache.prev_u
-    env.cache.circ_λ[:] .= current_λ .- env.cache.prev_λ
+    env.cache.circ_u[:] .= current_u #.- env.cache.prev_u
+    env.cache.circ_λ[:] .= current_λ #.- env.cache.prev_λ
     
     fft_u = abs.(fft(env.cache.circ_u))
     fft_λ = abs.(fft(env.cache.circ_λ))
@@ -271,6 +299,10 @@ function compute_observation(env::RDEEnv, strategy::SampledStateObservation)
     return vcat(sampled_u, sampled_λ, normalized_time)
 end
 
+function set_reward!(env::RDEEnv, rt::AbstractRDEReward)
+    @error "No reward set for type $(typeof(rt))"
+end
+
 """
     CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
 
@@ -319,108 +351,52 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_current = c[2]
 
-    @debug "taking action $action at time $(env.t), controls: $prev_controls to $c"
+    @debug "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
     prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
     
     if saves_per_action == 0
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain)
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain, verbose=env.verbose)
     else
         saveat = env.dt / saves_per_action
-        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, isoutofdomain=outofdomain)
+        sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), saveat=saveat, isoutofdomain=outofdomain, verbose=env.verbose)
     end
 
-    env.prob.sol = sol
-    env.t = sol.t[end]
-    env.state = sol.u[end]
-
-    env.reward_func(env)
+    
+    set_reward!(env, env.reward_type)
     if env.t ≥ env.prob.params.tmax
         env.done = true
+        @debug "tmax reached, t=$(env.t)"
     end
-    if sol.retcode != :Success
-        @debug "ODE solver failed, controls: $prev_controls to $c"
+    if sol.retcode != :Success || any(isnan.(sol.u[end]))
+        if any(isnan.(sol.u[end]))
+            @warn "NaN state detected"
+        end
+        @debug "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
+        env.truncated = true
         env.done = true
         env.reward = -2.0
+    elseif env.truncated
+        env.reward = -2.0
+        env.done = true;
+        @debug "truncated"
+    else
+        env.prob.sol = sol
+        env.t = sol.t[end]
+        env.state = sol.u[end]
     end
+    @debug "reward: $(env.reward)"
 
     return env.reward
 end
 
-"""
-    RDE_reward_max!(env::RDEEnv)
 
-Simple reward function based on maximum velocity.
-
-# Arguments
-- `env::RDEEnv`: RDE environment
-
-# Effects
-- Sets env.reward to maximum velocity value
-"""
-function RDE_reward_max!(env::RDEEnv)
-    prob = env.prob
-    N = prob.params.N
-    u = env.state[1:N]
-    env.reward = maximum(u)
-    nothing
-end
-
-"""
-    RDE_reward_energy_balance!(env::RDEEnv)
-
-Reward function based on energy balance.
-
-# Arguments
-- `env::RDEEnv`: RDE environment
-
-# Effects
-- Sets env.reward to negative energy balance
-"""
-function RDE_reward_energy_balance!(env::RDEEnv)
-    env.reward = -1 * energy_balance(env.state, env.prob.params)
-    nothing
-end
-
-"""
-    RDE_reward_combined!(env::RDEEnv)
-
-Combined reward function considering multiple objectives.
-
-# Arguments
-- `env::RDEEnv`: RDE environment
-
-# Effects
-- Sets env.reward based on:
-  - Chamber pressure (weighted 0.4)
-  - Energy balance (weighted 0.6)
-  - Velocity amplitude ratio (weighted 1.0)
-"""
-function RDE_reward_combined!(env::RDEEnv)
-    prob = env.prob
-    params = prob.params
-
-    energy_bal = energy_balance(env.state, params)
-    pressure = chamber_pressure(env.state, params)
-
-    weight_energy = 0.6
-    weight_pressure = 0.4
-    weight_span = 1.0
-    u, = split_sol(env.state)
-    amplitude_ratio = (maximum(u) - minimum(u)) / maximum(u)
-
-    env.reward = weight_pressure * pressure
-    -weight_energy * abs(energy_bal)
-    +weight_span * amplitude_ratio
-
-    nothing
-end
 
 # CommonRLInterface implementations
 CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
 CommonRLInterface.terminated(env::RDEEnv) = env.done
 function CommonRLInterface.observe(env::RDEEnv)
-    return compute_observation(env, env.cache.observation_strategy)
+    return compute_observation(env, env.observation_strategy)
 end
 
 function CommonRLInterface.actions(env::RDEEnv)
@@ -464,7 +440,8 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.state = vcat(env.prob.u0, env.prob.λ0)
     env.reward = 0.0
     env.done = false
-    env.reward_func(env)
+    env.truncated = false
+    set_reward!(env, env.reward_type)
 
     env.prob.cache.τ_smooth = env.τ_smooth
     env.prob.cache.u_p_previous = fill(env.prob.params.u_p, env.prob.params.N)

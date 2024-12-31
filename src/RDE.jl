@@ -30,12 +30,15 @@ module RDE
     export get_standard_normalized_actions, AbstractActionType, ScalarPressureAction, 
            VectorPressureAction, ScalarAreaScalarPressureAction
     export FourierObservation, StateObservation, SampledStateObservation
+    export AbstractRDEReward, ShockSpanReward, ShockPreservingReward
+    export set_reward!
 
     include("action_types.jl")
     include("structs.jl")
     include("utils.jl")
     include("solver.jl")
     include("RLenv.jl")
+    include("rewards.jl")
     include("plotting.jl")
     include("animations.jl")
     include("interactive_control.jl")

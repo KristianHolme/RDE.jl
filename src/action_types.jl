@@ -192,9 +192,9 @@ function get_standard_normalized_actions(action_type::ScalarPressureAction, acti
     @assert action_type.N > 0 "Action type N not set"
     @assert length(action) == 1
     if isa(action, AbstractArray)
-        return [zeros(action_type.N), ones(action_type.N)*action[1]]
+        return [zeros(action_type.N), ones(action_type.N) .* action[1]]
     else
-        return [zeros(action_type.N), ones(action_type.N)*action]
+        return [zeros(action_type.N), ones(action_type.N) .* action]
     end
 end
 

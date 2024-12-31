@@ -213,18 +213,17 @@ function periodic_ddx(u::AbstractArray, dx::Real)
 end
 
 """
-    periodic_diff(u::AbstractArray, dx::Real) -> Vector
+    periodic_diff(u::AbstractArray) -> Vector
 
 Calculate differences with periodic boundary conditions.
 
 # Arguments
 - `u::AbstractArray`: Function values at equally spaced points
-- `dx::Real`: Spacing between points
 
 # Returns
 - Vector of differences
 """
-function periodic_diff(u::AbstractArray, dx::Real)
+function periodic_diff(u::AbstractArray)
     d = similar(u)
     d[2:end] = diff(u)
     d[1] = u[1] - u[end]
@@ -232,9 +231,9 @@ function periodic_diff(u::AbstractArray, dx::Real)
 end
 
 """
-    shock_indices(u::AbstractArray, dx::Real) -> CircularArray{Bool}
+    shock_locations(u::AbstractArray, dx::Real) -> CircularArray{Bool}
 
-Find the indices of shocks in a periodic function.
+Find the locations of shocks in a periodic function.
 
 # Arguments
 - `u::AbstractArray`: Function values at equally spaced points
@@ -243,7 +242,7 @@ Find the indices of shocks in a periodic function.
 # Returns
 - `CircularArray{Bool}`: Boolean array indicating shock locations
 """
-function shock_indices(u::AbstractArray, dx::Real)
+function shock_locations(u::AbstractArray, dx::Real)
     N = length(u)
     L = N*dx
     minu, maxu = extrema(u)
@@ -267,6 +266,22 @@ function shock_indices(u::AbstractArray, dx::Real)
 end
 
 """
+    shock_indices(u::AbstractArray, dx::Real) -> CircularArray{Int}
+
+Find the indices of shocks in a periodic function.
+
+# Arguments
+- `u::AbstractArray`: Function values at equally spaced points
+- `dx::Real`: Spacing between points
+
+# Returns
+- `CircularArray{Int}`: Indices of shocks
+"""
+function shock_indices(u::AbstractArray, dx::Real)
+    return findall(shock_locations(u, dx))
+end
+
+"""
     count_shocks(u::AbstractArray, dx::Real) -> Int
 
 Count the number of shocks in a periodic function.
@@ -279,7 +294,7 @@ Count the number of shocks in a periodic function.
 - `Int`: Number of shocks detected
 """
 function count_shocks(u::AbstractArray, dx::Real)
-    return sum(shock_indices(u, dx))
+    return sum(shock_locations(u, dx))
 end
 
 """

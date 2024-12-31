@@ -16,7 +16,7 @@ dx = 2π/512
     u[100] = 1.0
 
     calc_inds = RDE.shock_indices(u, 1.0)
-    findall(calc_inds) == [100]
+    calc_inds == [100]
 end
 
 @testset "apply_periodic_shift!" begin

@@ -27,4 +27,8 @@ end
     include("policy_tests.jl")
 end
 
+@testitem "Rewards" begin
+    include("reward_tests.jl")
+end
+
 @run_package_tests

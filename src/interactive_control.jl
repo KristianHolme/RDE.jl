@@ -14,13 +14,12 @@ function get_timestep_scale(val)
 end
 
 """
-    interactive_control(; callback=nothing, kwargs...)
+    interactive_control(env::RDEEnv; callback=nothing)
 
 Create an interactive visualization and control interface for an RDE simulation.
 
 # Keywords
 - `callback`: Optional function called after each action with the environment as argument
-- `kwargs...`: Additional keyword arguments passed to RDEEnv constructor
 
 # Returns
 - `Tuple{RDEEnv, Figure}`: The RDE environment and Makie figure
@@ -57,8 +56,8 @@ env, fig = interactive_control(callback=(env)->println("t = \$(env.t)"))
 - Parameter changes are applied smoothly using the current timestep as the smoothing time
 - The energy balance and chamber pressure plots auto-scale as the simulation runs
 """
-function interactive_control(;callback=nothing, kwargs...)
-    env = RDEEnv(;kwargs...)
+
+function interactive_control(env::RDEEnv;callback=nothing)
     params = env.prob.params
     N = params.N
     fig = Figure(size=(1000, 600))
@@ -66,25 +65,28 @@ function interactive_control(;callback=nothing, kwargs...)
     plotting_area = fig[2,1] = GridLayout()
     energy_area = fig[3,1][1,1] = GridLayout()
     label_area  = fig[3,1][1,2] = GridLayout()
+    obs_area = fig[4,1] = GridLayout()
 
     # Observables for real-time plotting
     u_data = Observable(env.state[1:N])
     λ_data = Observable(env.state[N+1:end])
     u_max = @lift(maximum($u_data))
+    obs_data = Observable(observe(env))
 
     energy_bal_pts = Observable(Point2f[(env.t, energy_balance(env.state, params))])
     chamber_p_pts = Observable(Point2f[(env.t, chamber_pressure(env.state, params))])
+    reward_pts = Observable(Point2f[(env.t, env.reward)])
     
     # Control parameters with smooth transitions
     control_s = Observable(params.s)
     s_start = params.s
     on(control_s) do Val
-        env.prob.cache.s_current = Val
+        env.prob.cache.s_current .= Val
     end
     control_u_p = Observable(params.u_p)
     u_p_start = params.u_p
     on(control_u_p) do val
-        env.prob.cache.u_p_current = val
+        env.prob.cache.u_p_current .= val
     end
     time_step = Observable(env.dt)
     on(time_step) do val
@@ -116,11 +118,20 @@ function interactive_control(;callback=nothing, kwargs...)
         u_data[] = env.state[1:N]
         λ_data[] = env.state[N+1:end]
         time[] = env.t
+        obs_data[] = observe(env)
     end
 
     # Create main visualization
     main_plotting(plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
                 u_max=u_max,s=control_s, u_p=control_u_p)
+
+    # Create observation plot
+    ax_obs = Axis(obs_area[1,1], title="Observation", xlabel="index", ylabel="value")
+    n_obs = length(observe(env))
+    barplot!(ax_obs, 1:n_obs, obs_data)
+    on(obs_data) do obs
+        ylims!(ax_obs, (min(-2.0, minimum(obs)), max(2.0, maximum(obs))))
+    end
 
     # Energy balance plot with auto-scaling
     eb_start_xmax = 0.5
@@ -141,6 +152,17 @@ function interactive_control(;callback=nothing, kwargs...)
         ylims!(ax_cp, (min(0, minimum(y_vals)), maximum(y_vals)))
         xlims!(ax_cp, (0, max(cp_start_xmax, chamber_p_pts[][end][1])))
     end
+
+    # Reward plot with auto-scaling
+    ax_reward = Axis(energy_area[1,3], title="Reward", xlabel="t", ylabel="r", limits=(0,cp_start_xmax, nothing, nothing))
+    lines!(ax_reward, reward_pts)
+    on(reward_pts) do _
+        y_vals = getindex.(reward_pts[], 2)
+        ylims!(ax_reward, (min(-2.0, minimum(y_vals)), max(1.15, maximum(y_vals))))
+        @debug "reward_pts[][end][1] = $(reward_pts[][end][1])"
+        xlims!(ax_reward, (0, max(0.1, reward_pts[][end][1]*1.15)))
+    end
+
     rowsize!(fig.layout, 3, Auto(0.3))
 
     # Keyboard control setup
@@ -170,9 +192,10 @@ function interactive_control(;callback=nothing, kwargs...)
                         set_close_to!(slider_dt, time_step[])
                     elseif key == Keyboard.right
                         try
-                            act!(env, [0.0, 0.0]) #cached values are already set
+                            act!(env, [0.0]) #cached values are already set
                             energy_bal_pts[] =  push!(energy_bal_pts[], Point2f(env.t, energy_balance(env.state, params)))
                             chamber_p_pts[] = push!(chamber_p_pts[], Point2f(env.t, chamber_pressure(env.state, params)))
+                            reward_pts[] = push!(reward_pts[], Point2f(env.t, env.reward))
                             update_observables!()
                             if callback !== nothing
                                 @debug "calling callback"
@@ -204,6 +227,7 @@ function interactive_control(;callback=nothing, kwargs...)
                         set_close_to!(slider_u_p, control_u_p[])
                         energy_bal_pts[] = Point2f[(env.t, energy_balance(env.state, params))]
                         chamber_p_pts[] = Point2f[(env.t, chamber_pressure(env.state, params))]
+                        reward_pts[] = Point2f[(env.t, env.reward)]
                     end
                 end
             end

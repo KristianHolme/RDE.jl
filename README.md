@@ -89,20 +89,25 @@ env, fig = interactive_control(params=RDEParam())
 ```julia
 using RDE, POMDPs, POMDPTools, Crux
 
+# Define custom reward function
+struct CustomReward <: AbstractRDEReward
+    target::Float32
+    function CustomReward(;target::Float32=0.64f0)
+        return new(target)
+    end
+end
+function set_reward!(env::RDEEnv, rt::CustomReward)
+    target = rt.target
+    env.reward = -abs(target - env.prob.cache.u_p_current) + 1.0f0
+    nothing
+end
 # Setup environment
-params = RDEParam(tmax=2400.0)
-env = RDEEnv(params=params)
+params = RDEParam(tmax=100.0)
+env = RDEEnv(params=params, reward_type=CustomReward())
 
 # Convert to MDP for RL
 mdp = convert(POMDP, env)
 
-# Define custom reward function
-function custom_reward!(env::RDEEnv)
-    target = 0.64f0
-    env.reward = -abs(target - env.prob.cache.u_p_current) + 1.0f0
-    nothing
-end
-env.reward_func = custom_reward!
 ```
 
 
