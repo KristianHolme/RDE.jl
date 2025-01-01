@@ -360,6 +360,8 @@ Initialize the state vectors of an RDE problem using the initialization function
 function set_init_state!(prob::RDEProblem)
     prob.u0 = prob.u_init(prob.x)
     prob.λ0 = prob.λ_init(prob.x)
+    @assert all(isfinite.(prob.u0)) "NaN or Inf values detected in u0"
+    @assert all(isfinite.(prob.λ0)) "NaN or Inf values detected in λ0"
 end
 
 """

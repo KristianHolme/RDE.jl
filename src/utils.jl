@@ -328,35 +328,22 @@ function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::U
     return shifted_us
 end
 
-"""
-    get_n_shocks_init_func(n::Int) -> Function
+const SHOCK_DATA = let
+    data_file = joinpath(@__DIR__, "..", "data", "shocks.jld2")
+    if !isfile(data_file)
+        throw(ErrorException("Shock data file not found: $data_file"))
+    end
+    Dict(n => load(data_file, "u$n") for n in 1:4)
+end
 
-Return a function that generates initial conditions with n shocks (1-4).
-
-# Arguments
-- `n::Int`: Number of shocks (must be between 1 and 4)
-
-# Returns
-- `Function`: Initialization function that takes spatial coordinates as input
-
-# Throws
-- `ArgumentError`: If n is not between 1 and 4
-- `ErrorException`: If test data file is not found
-"""
 function get_n_shocks_init_func(n::Int)
     if !(1 <= n <= 4)
         throw(ArgumentError("n must be between 1 and 4"))
     end
-    
-    data_file = joinpath(@__DIR__, "..", "test", "test_data", "shocks.jld2")
-    if !isfile(data_file)
-        throw(ErrorException("Test data file not found: $data_file"))
-    end
-    
-    @load data_file u1 u2 u3 u4
-    starts = [u1, u2, u3, u4]
+    @assert n in keys(SHOCK_DATA) "Shock data for n=$n not found"
+    wave = SHOCK_DATA[n]
     x = range(0, 2π, length=513)[1:end-1]
-    itp = linear_interpolation(x, starts[n], extrapolation_bc=Periodic())
+    itp = linear_interpolation(x, wave, extrapolation_bc=Periodic())
     function u_init(x)
         return itp(x)
     end
