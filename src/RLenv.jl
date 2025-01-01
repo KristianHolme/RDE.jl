@@ -42,21 +42,33 @@ struct ShockSpanReward <: AbstractRDEReward
     target_shock_count::Int
     span_scale::Float32
     shock_weight::Float32
-    function ShockSpanReward(;target_shock_count::Int=3, span_scale::Float32=4.0f0, shock_weight::Float32=5.0f0)
+    function ShockSpanReward(;target_shock_count::Int=3, span_scale::Float32=4.0f0, shock_weight::Float32=0.8f0)
         return new(target_shock_count, span_scale, shock_weight)
     end
 end
 
-struct ShockPreservingReward <: AbstractRDEReward 
+mutable struct ShockPreservingReward <: AbstractRDEReward 
     target_shock_count::Int
     span_scale::Float32
     shock_weight::Float32
-    function ShockPreservingReward(;target_shock_count::Int=3, span_scale::Float32=4.0f0, shock_weight::Float32=8.0f0)
-        return new(target_shock_count, span_scale, shock_weight)
+    abscence_limit::Float32
+    abscence_start::Union{Float32, Nothing}
+    function ShockPreservingReward(;target_shock_count::Int=3,
+                                    span_scale::Float32=4.0f0, 
+                                    shock_weight::Float32=0.8f0,
+                                    abscence_limit::Float32=5.0f0)
+        return new(target_shock_count, span_scale, shock_weight, abscence_limit, nothing)
     end
 end
 
-
+mutable struct ShockPreservingSymmetryReward <: AbstractRDEReward 
+    target_shock_count::Int
+    cache::Vector{Float32}  
+    function ShockPreservingSymmetryReward(;target_shock_count::Int=4,
+                                    N::Int = 512)
+        return new(target_shock_count, zeros(Float32, N))
+    end
+end
 
 
 """
@@ -188,32 +200,25 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     end
 end
 
-"""
-    RDEEnv(; kwargs...)
-
-Construct an RDEEnv with Float32 precision.
-"""
 RDEEnv(; kwargs...) = RDEEnv{Float32}(; kwargs...)
-
-"""
-    RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat}
-
-Construct an RDEEnv with specified parameters and precision.
-"""
 RDEEnv(params::RDEParam{T}; kwargs...) where {T<:AbstractFloat} = RDEEnv{T}(; params=params, kwargs...)
 
 """
-    compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where {T}
+    compute_observation(env::RDEEnv{T}, strategy::AbstractObservationStrategy) where {T}
 
-Compute observation using Fourier coefficients of state differences.
+Compute observation given an observation strategy.
 
 # Arguments
 - `env::RDEEnv{T}`: RDE environment
-- `strategy::FourierObservation`: Fourier observation strategy
+- `strategy::AbstractObservationStrategy`: Observation strategy
 
 # Returns
-- Vector containing normalized Fourier coefficients and time
+- Vector containing observation
 """
+function compute_observation(env::RDEEnv{T}, strategy::AbstractObservationStrategy) where {T}
+    @error "compute_observation not implemented for strategy $(typeof(strategy))"
+end
+
 function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where {T}
     N = env.prob.params.N
     
@@ -239,18 +244,7 @@ function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where
     return vcat(u_obs, λ_obs, normalized_time)
 end
 
-"""
-    compute_observation(env::RDEEnv, ::StateObservation)
 
-Compute observation using full normalized state vector.
-
-# Arguments
-- `env::RDEEnv`: RDE environment
-- `::StateObservation`: State observation strategy
-
-# Returns
-- Vector containing normalized state and time
-"""
 function compute_observation(env::RDEEnv, ::StateObservation)
     N = length(env.state) ÷ 2
     u = @view env.state[1:N]
@@ -266,18 +260,7 @@ function compute_observation(env::RDEEnv, ::StateObservation)
     return vcat(normalized_state, env.t / env.prob.params.tmax)
 end
 
-"""
-    compute_observation(env::RDEEnv, strategy::SampledStateObservation)
 
-Compute observation using sampled points from state vector.
-
-# Arguments
-- `env::RDEEnv`: RDE environment
-- `strategy::SampledStateObservation`: Sampled state observation strategy
-
-# Returns
-- Vector containing normalized sampled state points and time
-"""
 function compute_observation(env::RDEEnv, strategy::SampledStateObservation)
     N = env.prob.params.N
     n = strategy.n_samples
@@ -686,6 +669,17 @@ struct StepwiseRDEPolicy{T<:AbstractFloat} <: Policy
         env.α = 0.0 #to assure that get_scaled_control works
         new{T}(env, ts, c)
     end
+end
+
+function POMDPs.action(π::StepwiseRDEPolicy, s)
+    t = π.env.t
+    cache = π.env.prob.cache
+    past = π.ts .≤ t    
+    idx = findlast(past)
+    if isnothing(idx)
+        return [0.0, 0.0]
+    end
+    return get_scaled_control.([cache.s_current[1], cache.u_p_current[1]], [π.env.smax, π.env.u_pmax], π.c[idx])
 end
 
 """
