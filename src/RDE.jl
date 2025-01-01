@@ -5,6 +5,7 @@ module RDE
     using CircularArrays
     using DomainSets
     using FFTW
+    using FileIO
     using Interpolations
     using JLD2
     using LinearAlgebra
@@ -30,7 +31,7 @@ module RDE
     export get_standard_normalized_actions, AbstractActionType, ScalarPressureAction, 
            VectorPressureAction, ScalarAreaScalarPressureAction
     export FourierObservation, StateObservation, SampledStateObservation
-    export AbstractRDEReward, ShockSpanReward, ShockPreservingReward
+    export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export set_reward!
 
     include("action_types.jl")
