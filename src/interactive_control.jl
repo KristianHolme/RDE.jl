@@ -14,12 +14,13 @@ function get_timestep_scale(val)
 end
 
 """
-    interactive_control(env::RDEEnv; callback=nothing)
+    interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
 
 Create an interactive visualization and control interface for an RDE simulation.
 
 # Keywords
 - `callback`: Optional function called after each action with the environment as argument
+- `show_observations`: Whether to show the observation plot (default: false)
 
 # Returns
 - `Tuple{RDEEnv, Figure}`: The RDE environment and Makie figure
@@ -42,6 +43,8 @@ Create an interactive visualization and control interface for an RDE simulation.
   - Reaction progress (λ)
   - Energy balance
   - Chamber pressure
+  - Reward
+  - Observations (optional)
 - Time and parameter value displays
 
 # Example
@@ -57,21 +60,20 @@ env, fig = interactive_control(callback=(env)->println("t = \$(env.t)"))
 - The energy balance and chamber pressure plots auto-scale as the simulation runs
 """
 
-function interactive_control(env::RDEEnv;callback=nothing)
+function interactive_control(env::RDEEnv; callback=nothing, show_observations=false)
     params = env.prob.params
     N = params.N
-    fig = Figure(size=(1000, 600))
+    fig = Figure(size=(1000, show_observations ? 800 : 600))
     upper_area = fig[1,1] = GridLayout()
     plotting_area = fig[2,1] = GridLayout()
     energy_area = fig[3,1][1,1] = GridLayout()
     label_area  = fig[3,1][1,2] = GridLayout()
-    obs_area = fig[4,1] = GridLayout()
-
+    
     # Observables for real-time plotting
     u_data = Observable(env.state[1:N])
     λ_data = Observable(env.state[N+1:end])
     u_max = @lift(maximum($u_data))
-    obs_data = Observable(observe(env))
+    obs_data = show_observations ? Observable(observe(env)) : nothing
 
     energy_bal_pts = Observable(Point2f[(env.t, energy_balance(env.state, params))])
     chamber_p_pts = Observable(Point2f[(env.t, chamber_pressure(env.state, params))])
@@ -118,19 +120,25 @@ function interactive_control(env::RDEEnv;callback=nothing)
         u_data[] = env.state[1:N]
         λ_data[] = env.state[N+1:end]
         time[] = env.t
-        obs_data[] = observe(env)
+        if show_observations
+            obs_data[] = observe(env)
+        end
     end
 
     # Create main visualization
     main_plotting(plotting_area, env.prob.x, u_data, λ_data, env.prob.params;
                 u_max=u_max,s=control_s, u_p=control_u_p)
 
-    # Create observation plot
-    ax_obs = Axis(obs_area[1,1], title="Observation", xlabel="index", ylabel="value")
-    n_obs = length(observe(env))
-    barplot!(ax_obs, 1:n_obs, obs_data)
-    on(obs_data) do obs
-        ylims!(ax_obs, (min(-2.0, minimum(obs)), max(2.0, maximum(obs))))
+    # Create observation plot if requested
+    if show_observations
+        obs_area = fig[4,1] = GridLayout()
+        ax_obs = Axis(obs_area[1,1], title="Observation", xlabel="index", ylabel="value")
+        n_obs = length(observe(env))
+        barplot!(ax_obs, 1:n_obs, obs_data)
+        on(obs_data) do obs
+            ylims!(ax_obs, (min(-1.0, minimum(obs)), max(1.0, maximum(obs))))
+        end
+        colsize!(obs_area, 1, Auto(0.3))
     end
 
     # Energy balance plot with auto-scaling
@@ -158,8 +166,8 @@ function interactive_control(env::RDEEnv;callback=nothing)
     lines!(ax_reward, reward_pts)
     on(reward_pts) do _
         y_vals = getindex.(reward_pts[], 2)
-        ylims!(ax_reward, (min(-2.0, minimum(y_vals)), max(1.15, maximum(y_vals))))
-        @debug "reward_pts[][end][1] = $(reward_pts[][end][1])"
+        ylims!(ax_reward, (min(-0.1, minimum(y_vals)), max(1.15, maximum(y_vals))))
+        # @debug "reward_pts[][end][1] = $(reward_pts[][end][1])"
         xlims!(ax_reward, (0, max(0.1, reward_pts[][end][1]*1.15)))
     end
 
