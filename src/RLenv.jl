@@ -225,27 +225,35 @@ function compute_observation(env::RDEEnv{T}, strategy::FourierObservation) where
     current_u = @view env.state[1:N]
     current_λ = @view env.state[N+1:end]
     
-    env.cache.circ_u[:] .= current_u #.- env.cache.prev_u
-    env.cache.circ_λ[:] .= current_λ #.- env.cache.prev_λ
+    env.cache.circ_u[:] .= current_u
+    env.cache.circ_λ[:] .= current_λ
     
     fft_u = abs.(fft(env.cache.circ_u))
     fft_λ = abs.(fft(env.cache.circ_λ))
     
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     
-    ϵ = T(1e-8)
-    norm_factor_u = max(maximum(fft_u), ϵ)
-    norm_factor_λ = max(maximum(fft_λ), ϵ)
+    # Take relevant FFT terms
+    u_terms = fft_u[1:n_terms]
+    λ_terms = fft_λ[1:n_terms]
     
-    u_obs = fft_u[1:n_terms] ./ norm_factor_u
-    λ_obs = fft_λ[1:n_terms] ./ norm_factor_λ
+    # Min-max normalization to [0,1] range
+    u_obs = (u_terms .- minimum(u_terms)) ./ (maximum(u_terms) - minimum(u_terms) + T(1e-8))
+    λ_obs = (λ_terms .- minimum(λ_terms)) ./ (maximum(λ_terms) - minimum(λ_terms) + T(1e-8))
     
-    normalized_time = env.t / env.prob.params.tmax
-    return vcat(u_obs, λ_obs, normalized_time)
+    # Scale to [-1,1] range if desired
+    u_obs = 2 .* u_obs .- 1
+    λ_obs = 2 .* λ_obs .- 1
+    
+    # Control parameters already naturally bounded
+    s_scaled = mean(env.prob.cache.s_current) / env.smax
+    u_p_scaled = mean(env.prob.cache.u_p_current) / env.u_pmax
+    
+    return vcat(u_obs, λ_obs, s_scaled, u_p_scaled)
 end
 
 
-function compute_observation(env::RDEEnv, ::StateObservation)
+function compute_observation(env::RDEEnv, rt::StateObservation)
     N = length(env.state) ÷ 2
     u = @view env.state[1:N]
     λ = @view env.state[N+1:end]
@@ -257,7 +265,9 @@ function compute_observation(env::RDEEnv, ::StateObservation)
     normalized_state = similar(env.state)
     normalized_state[1:N] = u ./ u_max 
     normalized_state[N+1:end] = λ ./ λ_max
-    return vcat(normalized_state, env.t / env.prob.params.tmax)
+    s_scaled = mean(env.prob.cache.s_current) / env.smax
+    u_p_scaled = mean(env.prob.cache.u_p_current) / env.u_pmax
+    return vcat(normalized_state, s_scaled, u_p_scaled)
 end
 
 
@@ -747,11 +757,11 @@ Preallocated vector for observations
 """
 function init_observation_vector(strategy::FourierObservation, N::Int)
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
-    return Vector{Float32}(undef, n_terms * 2 + 1)
+    return Vector{Float32}(undef, n_terms * 2 + 2)
 end
 
 function init_observation_vector(::StateObservation, N::Int)
-    return Vector{Float32}(undef, 2N + 1)
+    return Vector{Float32}(undef, 2N + 2)
 end
 
 function init_observation_vector(strategy::SampledStateObservation, N::Int)
