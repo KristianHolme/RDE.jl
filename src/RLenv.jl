@@ -387,7 +387,7 @@ end
 
 # CommonRLInterface implementations
 CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
-CommonRLInterface.terminated(env::RDEEnv) = env.done
+CommonRLInterface.terminated(env::RDEEnv) = env.done || env.truncated
 function CommonRLInterface.observe(env::RDEEnv)
     return compute_observation(env, env.observation_strategy)
 end
