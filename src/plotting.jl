@@ -535,7 +535,7 @@ Create a space-time plot of the solution in a moving reference frame.
   - Pressure values over time (if provided)
 """
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
-         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing)
+         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing, rewards=nothing)
     shifted_us = shift_inds(us, x, ts, c)
 
     fig = Figure(size=(1800, 600))
@@ -553,12 +553,19 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
     linkxaxes!(ax, ax2)
 
     if u_ps !== nothing
-        ax3 = Axis(fig[3,1], xlabel="t", ylabel="u_p", 
+        ax3 = Axis(fig[end+1,1], xlabel="t", ylabel="u_p", 
                     limits=(nothing, (minimum(u_ps)-0.05, maximum(u_ps)*1.05)),
                     xautolimitmargin=(0.0, 0.0))
         lines!(ax3, ts, u_ps)
         linkxaxes!(ax, ax3)
     end
-    autolimits!(ax)
+    if rewards !== nothing
+        ax4 = Axis(fig[end+1,1], xlabel="t", ylabel="Reward", 
+                    limits=(nothing, (minimum(rewards)-0.05, maximum(rewards)*1.05)),
+                    xautolimitmargin=(0.0, 0.0))
+        lines!(ax4, ts, rewards)
+        linkxaxes!(ax, ax4)
+    end
+    autolimits!(ax) 
     fig
 end
