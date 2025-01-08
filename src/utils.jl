@@ -351,6 +351,51 @@ function get_n_shocks_init_func(n::Int)
 end
 
 """
+    random_shock_init_func(x::AbstractVector) -> Vector
+
+Generate a random shock initial condition.
+
+# Arguments
+- `x::AbstractVector`: Spatial grid points
+
+# Returns
+- Vector of shock initial condition values
+"""
+function random_shock_init_func(x::AbstractVector)
+    n = rand(1:4)
+    @assert n in keys(SHOCK_DATA) "Shock data for n=$n not found"
+    wave = SHOCK_DATA[n]
+    x = range(0, 2π, length=513)[1:end-1]
+    itp = linear_interpolation(x, wave, extrapolation_bc=Periodic())
+    return itp(x)
+end
+
+function random_shock_combination_init_func(x::AbstractVector; temp::Real=0.2f0)
+    shocks = hcat(SHOCK_DATA[1], SHOCK_DATA[2], SHOCK_DATA[3], SHOCK_DATA[4])
+    weights = softmax(rand(4), temp)
+    return shocks * weights
+end
+
+"""
+    softmax(x::AbstractVector, temp::Real=1.0) -> Vector
+
+Compute the softmax of a vector with temperature scaling.
+
+# Arguments
+- `x::AbstractVector`: Input vector
+- `temp::Real`: Temperature parameter (default=1.0). Higher values make distribution more uniform.
+
+# Returns
+- Vector of same length as input containing softmax probabilities
+"""
+function softmax(x::AbstractVector, temp::Real=1.0)
+    x_scaled = x ./ temp
+    exp_x = exp.(x_scaled .- maximum(x_scaled))
+    return exp_x ./ sum(exp_x)
+end
+
+
+"""
     apply_periodic_shift!(target::AbstractVector, source::AbstractVector, shift::Integer) -> AbstractVector
 
 Apply a periodic shift to `source` and store the result in `target`.

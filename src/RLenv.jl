@@ -754,7 +754,7 @@ Initialize observation vector for given strategy.
 
 # Returns
 Preallocated vector for observations
-"""
+"""#TODO fix this, use another approach to get number of elements and then init vector
 function init_observation_vector(strategy::FourierObservation, N::Int)
     n_terms = min(strategy.fft_terms, N ÷ 2 + 1)
     return Vector{Float32}(undef, n_terms * 2 + 2)

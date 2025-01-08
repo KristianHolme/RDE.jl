@@ -27,10 +27,10 @@ module RDE
     export plot_solution, plot_policy, plot_policy_data, plot_shifted_history
     export animate_policy, animate_policy_data, animate_RDE
     export interactive_control
-    export get_n_shocks_init_func
+    export get_n_shocks_init_func, random_shock_init_func, random_shock_combination_init_func
     export get_standard_normalized_actions, AbstractActionType, ScalarPressureAction, 
            VectorPressureAction, ScalarAreaScalarPressureAction
-    export FourierObservation, StateObservation, SampledStateObservation
+    export AbstractObservationStrategy, FourierObservation, StateObservation, SampledStateObservation
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export set_reward!
 
