@@ -6,7 +6,7 @@ end
 function animate_policy_data(data::PolicyRunData, env::RDEEnv;
         dir_path="./videos/", fname="policy", format=".mp4", fps=25)
     time_idx = Observable(1)
-    time_steps = length(data.sparse_ts)
+    time_steps = length(data.state_ts)
     fig = plot_policy_data(env, data; time_idx, player_controls=false, show_mouse_vlines=false)
 
     if !isdir(dir_path)
