@@ -44,7 +44,7 @@ function set_reward!(env::RDEEnv{T}, rt::ShockPreservingReward) where T<:Abstrac
         if isnothing(rt.abscence_start)
             rt.abscence_start = env.t
         elseif env.t - rt.abscence_start > rt.abscence_limit
-            env.truncated = true
+            env.terminated = true
             env.reward = T(-2.0)
             return nothing
         end

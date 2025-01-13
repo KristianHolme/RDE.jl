@@ -87,15 +87,15 @@ mutable struct RDEEnvCache{T<:AbstractFloat}
     circ_λ::CircularVector{T, Vector{T}}
     prev_u::Vector{T}  # Previous step's u values
     prev_λ::Vector{T}  # Previous step's λ values
-    
+    action::Matrix{T} # column 1 = s action, column 2 = u_p action
     function RDEEnvCache{T}(N::Int) where {T<:AbstractFloat}
         # Initialize all arrays with zeros instead of undefined values
         circ_u = CircularArray(zeros(T, N))
         circ_λ = CircularArray(zeros(T, N))
         prev_u = zeros(T, N)
         prev_λ = zeros(T, N)
-        
-        return new{T}(circ_u, circ_λ, prev_u, prev_λ)
+        action = zeros(T, N, 2)    
+        return new{T}(circ_u, circ_λ, prev_u, prev_λ, action)
     end
 end
 
@@ -111,6 +111,8 @@ Reinforcement learning environment for the RDE system.
 - `dt::T`: Time step
 - `t::T`: Current time
 - `done::Bool`: Episode termination flag
+- `truncated::Bool`: Episode truncation flag
+- `terminated::Bool`: Episode termination flag
 - `reward::T`: Current reward
 - `smax::T`: Maximum value for s parameter
 - `u_pmax::T`: Maximum value for u_p parameter
@@ -151,6 +153,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     t::T                        # Current time
     done::Bool                        # Termination flag
     truncated::Bool
+    terminated::Bool
     reward::T
     smax::T
     u_pmax::T
@@ -193,7 +196,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         init_observation = init_observation_vector(observation_strategy, params.N)
         cache = RDEEnvCache{T}(params.N)
         return new{T}(prob, initial_state, init_observation,
-                      dt, 0.0, false, false, 0.0, smax, u_pmax,
+                      dt, 0.0, false, false, false, 0.0, smax, u_pmax,
                       momentum, τ_smooth, cache,
                       action_type, observation_strategy, 
                       reward_type, verbose)
@@ -316,18 +319,26 @@ Take an action in the environment.
 """
 function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0) where {T<:AbstractFloat}
     # Store current state before taking action
+    @debug "Starting act! for environment on thread $(Threads.threadid())"
     N = env.prob.params.N
     env.cache.prev_u .= @view env.state[1:N]
     env.cache.prev_λ .= @view env.state[N+1:end]
+    @debug "Stored previous state" prev_u=env.cache.prev_u prev_λ=env.cache.prev_λ
 
     t_span = (env.t, env.t + env.dt)
+    @debug "Set time span" t_span=t_span
     env.prob.cache.control_time = env.t
+    @debug "Set control time" control_time=env.prob.cache.control_time
 
     prev_controls = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c = [env.prob.cache.s_current, env.prob.cache.u_p_current]
     c_max = [env.smax, env.u_pmax]
+    @debug "Initial controls" prev_controls=prev_controls c_max=c_max
 
     normalized_standard_actions = get_standard_normalized_actions(env.action_type, action)
+    env.cache.action[:,1] = normalized_standard_actions[1]
+    env.cache.action[:,2] = normalized_standard_actions[2]
+    @debug "Normalized actions" actions=normalized_standard_actions
     
     for i in 1:2
         a = normalized_standard_actions[i]
@@ -337,12 +348,14 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         c_prev = c[i]
         c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
+        @debug "Updated control $i" action=a c_prev=c_prev c_hat=c_hat c_new=c[i]
     end
 
     env.prob.cache.s_previous = env.prob.cache.s_current
     env.prob.cache.u_p_previous = env.prob.cache.u_p_current
     env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_current = c[2]
+    @debug "Final controls set" s_current=c[1] u_p_current=c[2]
 
     @debug "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
@@ -359,6 +372,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     set_reward!(env, env.reward_type)
     if env.t ≥ env.prob.params.tmax
         env.done = true
+        env.terminated = true #maybe this should be truncated? Since we could go on, no natural stopping point
         @debug "tmax reached, t=$(env.t)"
     end
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
@@ -366,7 +380,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
             @warn "NaN state detected"
         end
         @debug "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
-        env.truncated = true
+        env.terminated = true
         env.done = true
         env.reward = -2.0
     elseif env.truncated
@@ -378,8 +392,8 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.t = sol.t[end]
         env.state = sol.u[end]
     end
-    @debug "reward: $(env.reward)"
-
+    @assert env.done ==  env.truncated || env.terminated
+    @debug "End of step reward: $(env.reward)"
     return env.reward
 end
 
