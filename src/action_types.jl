@@ -190,10 +190,10 @@ Convert scalar pressure action to standard form.
 """
 function get_standard_normalized_actions(action_type::ScalarPressureAction, action)
     @assert action_type.N > 0 "Action type N not set"
-    @assert length(action) == 1
     if isa(action, AbstractArray)
         return [zeros(action_type.N), ones(action_type.N) .* action[1]]
     else
+        @assert length(action) == 1
         return [zeros(action_type.N), ones(action_type.N) .* action]
     end
 end
