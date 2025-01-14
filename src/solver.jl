@@ -93,6 +93,8 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
     calc_derivatives!(u, λ, prob.cache)
 
+    
+
     u_x = cache.u_x
     u_xx = cache.u_xx
     λ_xx = cache.λ_xx
@@ -101,6 +103,20 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     βu = cache.βu                  # Real array of size N
     u_p_t = cache.u_p_t
     s_t = cache.s_t
+
+    # Add checks after derivatives
+    if any(isnan, u_x) || any(isinf, u_x)
+        @warn "Infinite/NaN values in u_x at t=$t"
+        @show extrema(u_x)
+    end
+    if any(isnan, u_xx) || any(isinf, u_xx)
+        @warn "Infinite/NaN values in u_xx at t=$t"
+        @show extrema(u_xx)
+    end
+    if any(isnan, λ_xx) || any(isinf, λ_xx)
+        @warn "Infinite/NaN values in λ_xx at t=$t"
+        @show extrema(λ_xx)
+    end
 
     # Update control values with smooth transition
     smooth_control!(u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
@@ -117,14 +133,103 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     # @debug "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
     # @debug "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
     
-    # Use shifted controls in calculations
-    @turbo @. ωu = ω(u, u_c, α)
-    @turbo @. ξu = ξ(u, u_0, n)
-    @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
+    # Add checks after control smoothing
+    if any(isnan, u_p_t) || any(isinf, u_p_t)
+        @warn "Infinite/NaN values in smoothed u_p at t=$t"
+        @show extrema(u_p_t)
+        @show u_p_t
+    end
+    if any(isnan, s_t) || any(isinf, s_t)
+        @warn "Infinite/NaN values in smoothed s at t=$t"
+        @show extrema(s_t)
+        @show s_t
+    end
 
-    # Combine both loops to reduce overhead
+    # Add checks after shifts
+    if any(isnan, cache.u_p_t_shifted) || any(isinf, cache.u_p_t_shifted)
+        @warn "Infinite/NaN values in shifted u_p at t=$t"
+        @show extrema(cache.u_p_t_shifted)
+        @show shift
+    end
+    if any(isnan, cache.s_t_shifted) || any(isinf, cache.s_t_shifted)
+        @warn "Infinite/NaN values in shifted s at t=$t"
+        @show extrema(cache.s_t_shifted)
+        @show shift
+    end
+
+    @turbo @. ωu = ω(u, u_c, α)
+    # Add check after ω calculation
+    if any(isnan, ωu) || any(isinf, ωu)
+        @warn "Infinite/NaN values in ω(u) at t=$t"
+        @show extrema(ωu)
+        @show extrema(u)
+        @show u_c
+        @show α
+    end
+
+    @turbo @. ξu = ξ(u, u_0, n)
+    # Add check after ξ calculation
+    if any(isnan, ξu) || any(isinf, ξu)
+        @warn "Infinite/NaN values in ξ(u) at t=$t"
+        @show extrema(ξu)
+        @show extrema(u)
+        @show u_0
+        @show n
+    end
+
+    @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
+    # Add check after β calculation
+    if any(isnan, βu) || any(isinf, βu)
+        @warn "Infinite/NaN values in β(u) at t=$t"
+        @show extrema(βu)
+        @show extrema(u)
+        @show extrema(cache.s_t_shifted)
+        @show extrema(cache.u_p_t_shifted)
+        @show k_param
+    end
+
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+    # Add check after du calculation
+    if any(isnan, du) || any(isinf, du)
+        @warn "Infinite/NaN values in du at t=$t"
+        @show extrema(du)
+        @show extrema(u)
+        @show extrema(u_x)
+        @show extrema(λ)
+        @show extrema(ωu)
+        @show extrema(u_xx)
+        @show extrema(ξu)
+        @show q_0
+        @show ν_1
+        @show ϵ
+    end
+
     @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
+    # Add check after dλ calculation
+    if any(isnan, dλ) || any(isinf, dλ)
+        @warn "Infinite/NaN values in dλ at t=$t"
+        @show extrema(dλ)
+        @show extrema(λ)
+        @show extrema(ωu)
+        @show extrema(βu)
+        @show extrema(λ_xx)
+        @show ν_2
+    end
+
+    # Add debug checks after major calculations
+    if any(isnan, u_x) || any(isinf, u_x)
+        @warn "Unstable derivatives detected at t=$t"
+        @show extrema(u_x)
+    end
+    
+    # Check final results
+    if any(isnan, du) || any(isinf, du)
+        @warn "Unstable RHS detected at t=$t"
+        @show extrema(du)
+        @show extrema(u)
+        @show extrema(λ)
+    end
+    
     nothing
 end
 
@@ -242,12 +347,16 @@ Check if the solution has left the physical domain.
 - `false` otherwise
 """
 function outofdomain(uλ, prob, t)
+    @debug "outofdomain called at t=$t"
+    T = eltype(uλ)
     N = prob.params.N
     u = @view uλ[1:N]
     λ = @view uλ[N+1:end]
-    u_out = any(u .< 0.0)
-    λ_out = any((λ .< 0.0) .| (λ .> 1.0))
-    return u_out || λ_out
+    u_out = any((u .< T(0.0)) .| (u .> T(10.0)))
+    λ_out = any((λ .< T(0.0)) .| (λ .> T(1.0)))
+    outofdomain = u_out || λ_out
+    @debug "outofdomain: $outofdomain at t=$t"
+    return outofdomain
 end
 
 """

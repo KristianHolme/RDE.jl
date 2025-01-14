@@ -43,7 +43,8 @@ using POMDPs
         env = RDEEnv(params;
             dt=0.1,
             reward_type=ShockPreservingReward(
-                target_shock_count=3
+                target_shock_count=3, 
+                abscence_limit=0.01f0
             )
         )
         
@@ -56,11 +57,14 @@ using POMDPs
         # Test truncation with wrong number of shocks
         env.state .= 1.0  # Constant state = no shocks
         set_reward!(env, env.reward_type)
-        @test env.truncated  # Should be truncated with wrong shock count
+        CommonRLInterface.act!(env, 0.0f0)
+        CommonRLInterface.act!(env, 0.0f0) #act twice to outrun abscence limit
+
+        @test env.terminated  # Should be terminated with wrong shock count
         @test env.reward ≈ -2.0  # Should get penalty reward
         
         # Test reward with correct number of shocks
-        env.truncated = false  # Reset truncation flag
+        env.terminated = false  # Reset termination flag
         N = env.prob.params.N
         env.state[1:N] .= 1.0
         # Create 3 evenly spaced shocks
@@ -68,7 +72,7 @@ using POMDPs
         env.state[2N÷3] = 2.0
         env.state[N] = 2.0
         set_reward!(env, env.reward_type)
-        @test !env.truncated  # Should not be truncated
+        @test !env.terminated  # Should not be terminated
         @test env.reward > 0  # Should get positive reward for evenly spaced shocks
         @test env.reward ≤ 1.0  # Reward should be normalized
     end

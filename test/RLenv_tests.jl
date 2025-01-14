@@ -31,26 +31,28 @@ end
         env = RDEEnv(params=params, observation_strategy=FourierObservation(fft_terms))
         
         # Test initialization
-        @test length(env.observation) == 2fft_terms + 1  # 2 * fft_terms + time
+        @test length(env.observation) == 2fft_terms + 2  # 2 * fft_terms + s_scaled + u_p_scaled
         
         # Test observation
         obs = CommonRLInterface.observe(env)
-        @test length(obs) == 2fft_terms + 1
-        @test all(0 .<= obs[1:end-1] .<= 1)  # FFT coefficients should be normalized
-        @test 0 <= obs[end] <= 1  # Normalized time
+        @test length(obs) == 2fft_terms + 2
+        @test all(-1 .<= obs[1:2fft_terms] .<= 1)  # FFT coefficients should be normalized
+        @test -1 <= obs[2fft_terms+1] <= 1  # Normalized s_scaled
+        @test -1 <= obs[2fft_terms+2] <= 1  # Normalized u_p_scaled
     end
     
     @testset "State Observation" begin
         env = RDEEnv(params=params, observation_strategy=StateObservation())
         
         # Test initialization
-        @test length(env.observation) == 2N + 1  # u and λ states + time
+        @test length(env.observation) == 2N + 2  # u and λ states + s_scaled + u_p_scaled
         
         # Test observation
         obs = CommonRLInterface.observe(env)
-        @test length(obs) == 2N + 1
-        @test all(-1 .<= obs[1:end-1] .<= 1)  # State components should be normalized
-        @test 0 <= obs[end] <= 1  # Normalized time
+        @test length(obs) == 2N + 2
+        @test all(-1 .<= obs[1:end-2] .<= 1)  # State components should be normalized
+        @test 0 <= obs[end-1] <= 1  # Normalized s
+        @test 0 <= obs[end] <= 1  # Normalized u_p
         
         # Test that first N components are normalized u and next N are normalized λ
         u_obs = obs[1:N]

@@ -372,7 +372,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     set_reward!(env, env.reward_type)
     if env.t ≥ env.prob.params.tmax
         env.done = true
-        env.terminated = true #maybe this should be truncated? Since we could go on, no natural stopping point
+        env.truncated = true #maybe this should be truncated? Since we could go on, no natural stopping point
         @debug "tmax reached, t=$(env.t)"
     end
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
@@ -383,16 +383,16 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.terminated = true
         env.done = true
         env.reward = -2.0
-    elseif env.truncated
+    elseif env.terminated
         env.reward = -2.0
         env.done = true;
-        @debug "truncated"
+        @debug "terminated"
     else
         env.prob.sol = sol
         env.t = sol.t[end]
         env.state = sol.u[end]
     end
-    @assert env.done ==  env.truncated || env.terminated
+    @assert env.done == xor(env.truncated, env.terminated)
     @debug "End of step reward: $(env.reward)"
     return env.reward
 end
@@ -401,7 +401,7 @@ end
 
 # CommonRLInterface implementations
 CommonRLInterface.state(env::RDEEnv) = vcat(env.state, env.t)
-CommonRLInterface.terminated(env::RDEEnv) = env.done || env.truncated
+CommonRLInterface.terminated(env::RDEEnv) = env.done
 function CommonRLInterface.observe(env::RDEEnv)
     return compute_observation(env, env.observation_strategy)
 end
@@ -448,6 +448,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.reward = 0.0
     env.done = false
     env.truncated = false
+    env.terminated = false
     set_reward!(env, env.reward_type)
 
     env.prob.cache.τ_smooth = env.τ_smooth
