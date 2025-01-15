@@ -85,32 +85,72 @@ using RDE, GLMakie
 env, fig = interactive_control(params=RDEParam())
 ```
 
-### Reinforcement Learning
+
+## Deep Reinforcement Learning
+
+The package provides extensive support for Deep Reinforcement Learning (DRL) through integration with multiple frameworks:
+
+### Stable-Baselines3 Integration
 ```julia
-using RDE, POMDPs, POMDPTools, Crux
+using RDE
+using RLBridge
+using PyCall
 
-# Define custom reward function
-struct CustomReward <: AbstractRDEReward
-    target::Float32
-    function CustomReward(;target::Float32=0.64f0)
-        return new(target)
-    end
-end
-function set_reward!(env::RDEEnv, rt::CustomReward)
-    target = rt.target
-    env.reward = -abs(target - env.prob.cache.u_p_current) + 1.0f0
-    nothing
-end
-# Setup environment
-params = RDEParam(tmax=100.0)
-env = RDEEnv(params=params, reward_type=CustomReward())
+# Create environment with specific parameters
+env = RDEEnv(;
+    dt=0.1,
+    τ_smooth=0.01,
+    params=RDEParam(tmax=100.0),
+    observation_strategy=FourierObservation(16),  # Fourier-based observations
+    action_type=ScalarPressureAction(),          # Control chamber pressure
+    reward_type=ShockPreservingReward(target_shock_count=3)  # Maintain 3 shocks
+)
 
-# Convert to MDP for RL
-mdp = convert(POMDP, env)
+# Convert to Gym environment for SB3
+gym_env = convert_to_gym(env)
 
+# Train with PPO
+sb = pyimport("sbx") # stable_baselines jax
+model = sb.PPO("MlpPolicy", gym_env, device="cpu")
+model.learn(total_timesteps=1_000_000)
+
+# Evaluate trained policy
+policy = SBPolicy(env, model.policy)
+data = run_policy(policy, env)
+plot_policy_data(env, data)
 ```
 
+### Vectorized Environments
+For faster training, the package supports parallel environment execution:
 
+```julia
+# Create multiple environments
+envs = [RDEEnv(dt=0.1, τ_smooth=0.01) for _ in 1:8]
+vec_env = RDEVecEnv(envs)
+
+# Convert to SB3 VecEnv
+sb_vec_env = convert_to_vec_env[](vec_env)
+
+# Train with vectorized environments
+model = sb.PPO("MlpPolicy", sb_vec_env)
+model.learn(total_timesteps=1_000_000)
+```
+
+### Customizable Components
+
+#### Observation Strategies
+- `StateObservation`: Direct state observations
+- `FourierObservation`: Fourier coefficients of the state
+- `ExperimentalObservation`: Custom observation space
+
+#### Action Types
+- `ScalarPressureAction`: Control chamber pressure
+- `ScalarAreaScalarPressureAction`: Control both pressure and injectionarea
+
+#### Reward Functions
+- `ShockSpanReward`: Maximize shock wave spacing
+- `ShockPreservingReward`: Maintain specific number of shocks
+- `ExperimentalReward`: Customizable reward components
 
 ## References
 
