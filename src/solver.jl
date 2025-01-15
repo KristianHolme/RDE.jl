@@ -73,9 +73,6 @@ The RDE system consists of coupled PDEs for velocity (u) and reaction progress (
 """
 function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     N = prob.params.N
-    clamp!(@view(uλ[1:N]), 0.0, 25.0)
-    clamp!(@view(uλ[N+1:end]), 0.0, 1.0)
-
     ν_1 = prob.params.ν_1
     ν_2 = prob.params.ν_2
     q_0 = prob.params.q_0
@@ -96,8 +93,6 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
     calc_derivatives!(u, λ, prob.cache)
 
-    
-
     u_x = cache.u_x
     u_xx = cache.u_xx
     λ_xx = cache.λ_xx
@@ -106,23 +101,6 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     βu = cache.βu                  # Real array of size N
     u_p_t = cache.u_p_t
     s_t = cache.s_t
-
-    # Add checks after derivatives
-    if any(isnan, u_x) || any(isinf, u_x)
-        @error "Infinite/NaN values in u_x at t=$t"
-        @show extrema(u_x)
-        throw(error("Infinite/NaN values in u_x at t=$t"))
-    end
-    if any(isnan, u_xx) || any(isinf, u_xx)
-        @error "Infinite/NaN values in u_xx at t=$t"
-        @show extrema(u_xx)
-        throw(error("Infinite/NaN values in u_xx at t=$t"))
-    end
-    if any(isnan, λ_xx) || any(isinf, λ_xx)
-        @error "Infinite/NaN values in λ_xx at t=$t"
-        @show extrema(λ_xx)
-        throw(error("Infinite/NaN values in λ_xx at t=$t"))
-    end
 
     # Update control values with smooth transition
     smooth_control!(u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
@@ -138,115 +116,16 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     
     # @debug "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
     # @debug "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
-    
-    # Add checks after control smoothing
-    if any(isnan, u_p_t) || any(isinf, u_p_t)
-        @error "Infinite/NaN values in smoothed u_p at t=$t"
-        @show extrema(u_p_t)
-        @show u_p_t
-        throw(error("Infinite/NaN values in smoothed u_p at t=$t"))
-    end
-    if any(isnan, s_t) || any(isinf, s_t)
-        @error "Infinite/NaN values in smoothed s at t=$t"
-        @show extrema(s_t)
-        @show s_t
-        throw(error("Infinite/NaN values in smoothed s at t=$t"))
-    end
-
-    # Add checks after shifts
-    if any(isnan, cache.u_p_t_shifted) || any(isinf, cache.u_p_t_shifted)
-        @error "Infinite/NaN values in shifted u_p at t=$t"
-        @show extrema(cache.u_p_t_shifted)
-        @show shift
-        throw(error("Infinite/NaN values in shifted u_p at t=$t"))
-    end
-    if any(isnan, cache.s_t_shifted) || any(isinf, cache.s_t_shifted)
-        @error "Infinite/NaN values in shifted s at t=$t"
-        @show extrema(cache.s_t_shifted)
-        @show shift
-        throw(error("Infinite/NaN values in shifted s at t=$t"))
-    end
 
     @turbo @. ωu = ω(u, u_c, α)
-    # Add check after ω calculation
-    if any(isnan, ωu) || any(isinf, ωu)
-        @error "Infinite/NaN values in ω(u) at t=$t"
-        @show extrema(ωu)
-        @show extrema(u)
-        @show u_c
-        @show α
-        @show u
-        throw(error("Infinite/NaN values in ω(u) at t=$t"))
-    end
 
     @turbo @. ξu = ξ(u, u_0, n)
-    # Add check after ξ calculation
-    if any(isnan, ξu) || any(isinf, ξu)
-        @error "Infinite/NaN values in ξ(u) at t=$t"
-        @show extrema(ξu)
-        @show extrema(u)
-        @show u_0
-        @show n
-        throw(error("Infinite/NaN values in ξ(u) at t=$t"))
-    end
 
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
-    # Add check after β calculation
-    if any(isnan, βu) || any(isinf, βu)
-        @error "Infinite/NaN values in β(u) at t=$t"
-        @show extrema(βu)
-        @show extrema(u)
-        @show extrema(cache.s_t_shifted)
-        @show extrema(cache.u_p_t_shifted)
-        @show k_param
-        throw(error("Infinite/NaN values in β(u) at t=$t"))
-    end
 
     @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
-    # Add check after du calculation
-    if any(isnan, du) || any(isinf, du)
-        @error "Infinite/NaN values in du at t=$t"
-        @show extrema(du)
-        @show extrema(u)
-        @show extrema(u_x)
-        @show extrema(λ)
-        @show extrema(ωu)
-        @show extrema(u_xx)
-        @show extrema(ξu)
-        @show q_0
-        @show ν_1
-        @show ϵ
-        throw(error("Infinite/NaN values in du at t=$t"))
-    end
 
     @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
-    # Add check after dλ calculation
-    if any(isnan, dλ) || any(isinf, dλ)
-        @error "Infinite/NaN values in dλ at t=$t"
-        @show extrema(dλ)
-        @show extrema(λ)
-        @show extrema(ωu)
-        @show extrema(βu)
-        @show extrema(λ_xx)
-        @show ν_2
-        throw(error("Infinite/NaN values in dλ at t=$t"))
-    end
-
-    # Add debug checks after major calculations
-    if any(isnan, u_x) || any(isinf, u_x)
-        @error "Unstable derivatives detected at t=$t"
-        @show extrema(u_x)
-        throw(error("Unstable derivatives detected at t=$t"))
-    end
-    
-    # Check final results
-    if any(isnan, du) || any(isinf, du)
-        @error "Unstable RHS detected at t=$t"
-        @show extrema(du)
-        @show extrema(u)
-        @show extrema(λ)
-        throw(error("Unstable RHS detected at t=$t"))
-    end
     
     nothing
 end
@@ -373,9 +252,6 @@ function outofdomain(uλ, prob, t)
     u_out = any((u .< T(0.0)) .| (u .> T(25.0)))
     λ_out = any((λ .< T(0.0)) .| (λ .> T(1.0)))
     outofdomain = u_out || λ_out
-    if outofdomain
-        @debug "outofdomain: $outofdomain at t=$t" extrema(u) extrema(λ)
-    end
     return outofdomain
 end
 
