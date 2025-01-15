@@ -70,6 +70,24 @@ end
     c ≈ previous
 end
 
+@testset "ODE Solver Tests" begin
+    @testset "Basic Solver Success" begin
+        for T in [Float32, Float64]
+            prob = RDEProblem(RDEParam{T}(;N=512, tmax=0.01))
+            solve_pde!(prob)
+            @test prob.sol.retcode == :Success
+        end
+    end
+
+    @testset "Longer Integration Success" begin
+        for T in [Float32, Float64]
+            prob = RDEProblem(RDEParam{T}(;N=512, tmax=5.0))
+            solve_pde!(prob)
+            @test prob.sol.retcode == :Success
+        end
+    end
+end
+
 
 
 
