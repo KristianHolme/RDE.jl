@@ -75,7 +75,7 @@ end
         for T in [Float32, Float64]
             prob = RDEProblem(RDEParam{T}(;N=512, tmax=0.01))
             solve_pde!(prob)
-            @test prob.sol.retcode == :Success
+            @test Symbol(prob.sol.retcode) == :Success
         end
     end
 
@@ -83,7 +83,7 @@ end
         for T in [Float32, Float64]
             prob = RDEProblem(RDEParam{T}(;N=512, tmax=5.0))
             solve_pde!(prob)
-            @test prob.sol.retcode == :Success
+            @test Symbol(prob.sol.retcode) == :Success
         end
     end
 end
