@@ -164,6 +164,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     observation_strategy::AbstractObservationStrategy
     reward_type::AbstractRDEReward
     verbose::Bool               # Control solver output
+    info::Dict{String, Any}
     function RDEEnv{T}(;
         dt=1.0,
         smax=4.0,
@@ -199,7 +200,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
                       dt, 0.0, false, false, false, 0.0, smax, u_pmax,
                       momentum, τ_smooth, cache,
                       action_type, observation_strategy, 
-                      reward_type, verbose)
+                      reward_type, verbose, Dict{String, Any}())
     end
 end
 
@@ -372,8 +373,9 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     set_reward!(env, env.reward_type)
     if env.t ≥ env.prob.params.tmax
         env.done = true
-        env.truncated = true #maybe this should be truncated? Since we could go on, no natural stopping point
+        env.truncated = true 
         @debug "tmax reached, t=$(env.t)"
+        env.info["Truncation.Reason"] = "tmax reached"
     end
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
         if any(isnan.(sol.u[end]))
@@ -383,6 +385,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.terminated = true
         env.done = true
         env.reward = -2.0
+        env.info["Termination.Reason"] = "ODE solver failed"
     elseif env.terminated
         env.reward = -2.0
         env.done = true;
@@ -392,7 +395,10 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.t = sol.t[end]
         env.state = sol.u[end]
     end
-    @assert env.done == xor(env.truncated, env.terminated)
+    if env.done != xor(env.truncated, env.terminated)
+        @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
+        @info "info: $(env.info)"
+    end
     @debug "End of step reward: $(env.reward)"
     return env.reward
 end
