@@ -386,6 +386,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.done = true
         env.reward = -2.0
         env.info["Termination.Reason"] = "ODE solver failed"
+        env.info["Termination.ReturnCode"] = sol.retcode
     elseif env.terminated
         env.reward = -2.0
         env.done = true;
