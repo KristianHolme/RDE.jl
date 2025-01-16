@@ -31,4 +31,8 @@ end
     include("reward_tests.jl")
 end
 
+@testitem "VecEnv" begin
+    include("vec_env_tests.jl")
+end
+
 @run_package_tests

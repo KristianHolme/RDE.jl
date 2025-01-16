@@ -33,6 +33,8 @@ module RDE
     export AbstractObservationStrategy, FourierObservation, StateObservation, SampledStateObservation
     export AbstractRDEReward, ShockSpanReward, ShockPreservingReward, ShockPreservingSymmetryReward
     export set_reward!
+    export RDEVecEnv
+    export step!, seed!
 
     include("action_types.jl")
     include("structs.jl")
@@ -43,7 +45,7 @@ module RDE
     include("plotting.jl")
     include("animations.jl")
     include("interactive_control.jl")
-
+    include("vec_env.jl")
     @compile_workload begin
         try
             # Simulate tiny case for a short time
