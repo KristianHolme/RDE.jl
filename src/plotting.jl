@@ -535,7 +535,7 @@ Create a space-time plot of the solution in a moving reference frame.
   - Pressure values over time (if provided)
 """
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
-         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing, rewards=nothing)
+         ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing, rewards=nothing, target_shock_count=nothing)
     shifted_us = shift_inds(us, x, ts, c)
 
     fig = Figure(size=(1800, 600))
@@ -550,6 +550,9 @@ function plot_shifted_history(us::AbstractArray, x::AbstractArray,
                 limits=(nothing, (-0.05, maximum(counts)*1.05)),
                 xautolimitmargin=(0.0, 0.0))
     lines!(ax2, ts, counts)
+    if target_shock_count !== nothing
+        hlines!(ax2, target_shock_count, color=:red, alpha=0.8, linestyle=:dash) #maybe change to stair if target shocks changes durin episode
+    end
     linkxaxes!(ax, ax2)
 
     if u_ps !== nothing
