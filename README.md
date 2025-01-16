@@ -115,7 +115,7 @@ model = sb.PPO("MlpPolicy", gym_env, device="cpu")
 model.learn(total_timesteps=1_000_000)
 
 # Evaluate trained policy
-policy = SBPolicy(env, model.policy)
+policy = SBPolicy(model.policy) #wrap the python policy in a julia type
 data = run_policy(policy, env)
 plot_policy_data(env, data)
 ```
