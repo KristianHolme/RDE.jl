@@ -536,7 +536,7 @@ Create a space-time plot of the solution in a moving reference frame.
 """
 function plot_shifted_history(us::AbstractArray, x::AbstractArray,
          ts::AbstractArray, c::Union{Real, AbstractArray}; u_ps=nothing, rewards=nothing, target_shock_count=nothing)
-    shifted_us = shift_inds(us, x, ts, c)
+    shifted_us = Array.(shift_inds(us, x, ts, c))
 
     fig = Figure(size=(1800, 600))
     ax = Axis(fig[1,1], title="u(x+ct, t)", xlabel="t",
