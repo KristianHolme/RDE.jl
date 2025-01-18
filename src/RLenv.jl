@@ -165,6 +165,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     reward_type::AbstractRDEReward
     verbose::Bool               # Control solver output
     info::Dict{String, Any}
+    steps_taken::Int
     function RDEEnv{T}(;
         dt=1.0,
         smax=4.0,
@@ -200,7 +201,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
                       dt, 0.0, false, false, false, 0.0, smax, u_pmax,
                       momentum, τ_smooth, cache,
                       action_type, observation_strategy, 
-                      reward_type, verbose, Dict{String, Any}())
+                      reward_type, verbose, Dict{String, Any}(), 0)
     end
 end
 
@@ -349,18 +350,16 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         c_prev = c[i]
         c_hat = @. ifelse(a < 0, c_prev .* (a .+ 1), c_prev .+ (c_max[i] .- c_prev) .* a)
         c[i] = env.α .* c_prev .+ (1 - env.α) .* c_hat
-        @debug "Updated control $i" action=a c_prev=c_prev c_hat=c_hat c_new=c[i]
     end
 
     env.prob.cache.s_previous = env.prob.cache.s_current
     env.prob.cache.u_p_previous = env.prob.cache.u_p_current
     env.prob.cache.s_current = c[1]
     env.prob.cache.u_p_current = c[2]
-    @debug "Final controls set" s_current=c[1] u_p_current=c[2]
 
     @debug "taking action $action at time $(env.t), controls: $(mean.(prev_controls)) to $(mean.(c))"
 
-    prob_ode = ODEProblem(RDE_RHS!, env.state, t_span, env.prob)
+    prob_ode = ODEProblem{true, SciMLBase.FullSpecialize}(RDE_RHS!, env.state, t_span, env.prob)
     
     if saves_per_action == 0
         sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(), save_on=false, isoutofdomain=outofdomain, verbose=env.verbose)
@@ -370,13 +369,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
     end
 
     
-    set_reward!(env, env.reward_type)
-    if env.t ≥ env.prob.params.tmax
-        env.done = true
-        env.truncated = true 
-        @debug "tmax reached, t=$(env.t)"
-        env.info["Truncation.Reason"] = "tmax reached"
-    end
+    #Check termination caused by ODE solver
     if sol.retcode != :Success || any(isnan.(sol.u[end]))
         if any(isnan.(sol.u[end]))
             @warn "NaN state detected"
@@ -387,18 +380,34 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         env.reward = -2.0
         env.info["Termination.Reason"] = "ODE solver failed"
         env.info["Termination.ReturnCode"] = sol.retcode
-    elseif env.terminated
-        env.reward = -2.0
-        env.done = true;
-        @debug "terminated"
-    else
+        env.info["Termination.env_t"] = env.t
+        @logmsg LogLevel(-500) "ODE solver failed, t=$(env.t), terminating"
+    else #advance environment
         env.prob.sol = sol
         env.t = sol.t[end]
         env.state = sol.u[end]
+
+        env.steps_taken += 1
+
+        set_reward!(env, env.reward_type)
+        if env.terminated #maybe reward caused termination
+            env.reward = -2.0
+            env.done = true;
+            @debug "termination caused by reward"
+            @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
+        end
+        if env.t ≥ env.prob.params.tmax
+            env.done = true
+            env.truncated = true 
+            @debug "tmax reached, t=$(env.t)"
+            env.info["Truncation.Reason"] = "tmax reached"
+        end
     end
+
     if env.done != xor(env.truncated, env.terminated)
         @warn "done is not xor(truncated, terminated), at t=$(env.t)" env.done, env.truncated, env.terminated
         @info "info: $(env.info)"
+        @logmsg LogLevel(-500) sol.retcode
     end
     @debug "End of step reward: $(env.reward)"
     return env.reward
@@ -453,6 +462,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     set_init_state!(env.prob)
     env.state = vcat(env.prob.u0, env.prob.λ0)
     env.reward = 0.0
+    env.steps_taken = 0
     env.done = false
     env.truncated = false
     env.terminated = false
