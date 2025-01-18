@@ -9,6 +9,7 @@ module RDE
     using Interpolations
     using JLD2
     using LinearAlgebra
+    using Logging
     using LoopVectorization
     using Makie
     using Observables
