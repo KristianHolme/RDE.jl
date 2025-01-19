@@ -154,7 +154,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
     done::Bool                        # Termination flag
     truncated::Bool
     terminated::Bool
-    reward::T
+    reward::Union{T, Vector{T}}
     smax::T
     u_pmax::T
     α::T #action momentum
@@ -173,8 +173,7 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         params::RDEParam{T}=RDEParam{T}(),
         momentum=0.0,
         τ_smooth=0.1,
-        fft_terms::Int=16,
-        observation_strategy::AbstractObservationStrategy=FourierObservation(fft_terms),
+        observation_strategy::AbstractObservationStrategy=FourierObservation(16),
         action_type::AbstractActionType=ScalarPressureAction(),
         reward_type::AbstractRDEReward=ShockSpanReward(target_shock_count=3),
         verbose::Bool=true,
@@ -192,13 +191,11 @@ mutable struct RDEEnv{T<:AbstractFloat} <: AbstractEnv
         # Set N in action_type
         set_N!(action_type, params.N)
 
-        fft_terms = min(fft_terms, params.N ÷ 2)
-
         initial_state = vcat(prob.u0, prob.λ0)
         init_observation = init_observation_vector(observation_strategy, params.N)
         cache = RDEEnvCache{T}(params.N)
         return new{T}(prob, initial_state, init_observation,
-                      dt, 0.0, false, false, false, 0.0, smax, u_pmax,
+                      dt, T(0.0), false, false, false, T(0.0), smax, u_pmax,
                       momentum, τ_smooth, cache,
                       action_type, observation_strategy, 
                       reward_type, verbose, Dict{String, Any}(), 0)
@@ -377,7 +374,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
         @debug "ODE solver failed, controls: $(mean(prev_controls)) to $(mean(c))"
         env.terminated = true
         env.done = true
-        env.reward = -2.0
+        set_termination_reward!(env, -2.0)
         env.info["Termination.Reason"] = "ODE solver failed"
         env.info["Termination.ReturnCode"] = sol.retcode
         env.info["Termination.env_t"] = env.t
@@ -391,7 +388,7 @@ function CommonRLInterface.act!(env::RDEEnv{T}, action; saves_per_action::Int=0)
 
         set_reward!(env, env.reward_type)
         if env.terminated #maybe reward caused termination
-            env.reward = -2.0
+            set_termination_reward!(env, -2.0)
             env.done = true;
             @debug "termination caused by reward"
             @logmsg LogLevel(-500) "terminated, t=$(env.t), from reward?"
@@ -800,3 +797,11 @@ function init_observation_vector(strategy::SampledStateObservation, N::Int)
     return Vector{Float32}(undef, 2 * strategy.n_samples + 1)
 end
 
+function set_termination_reward!(env::RDEEnv, value::Number)
+    value = eltype(env.reward)(value)
+    if env.reward isa Number
+        env.reward = value
+    else
+        env.reward .= value
+    end
+end
