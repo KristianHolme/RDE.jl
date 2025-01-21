@@ -81,11 +81,11 @@ function CommonRLInterface.terminated(env::RDEVecEnv) #this is SB done, not term
 end
 
 """
-    seed!(env::RDEVecEnv, seed::Int)
+    seed!(env::AbstractEnv, seed::Int)
 
 Set the random seed for the environment.
 """
-function seed!(env::RDEVecEnv, seed::Int)
+function seed!(env::AbstractEnv, seed::Int)
     Random.seed!(seed)
 end
 
