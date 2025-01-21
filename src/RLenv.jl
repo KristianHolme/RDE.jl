@@ -458,7 +458,7 @@ function CommonRLInterface.reset!(env::RDEEnv)
     env.t = 0
     set_init_state!(env.prob)
     env.state = vcat(env.prob.u0, env.prob.λ0)
-    env.reward = 0.0
+    set_termination_reward!(env, 0.0)
     env.steps_taken = 0
     env.done = false
     env.truncated = false
