@@ -7,32 +7,12 @@ using TestItemRunner
     include("solver_tests.jl")
 end
 
-@testitem "env" begin
-    include("RLenv_tests.jl")
-end
-
 @testitem "utils" begin
     include("utils_tests.jl")
 end
 
 @testitem "Types" begin
     include("types_tests.jl")
-end
-
-@testitem "Actions" begin
-    include("actions_tests.jl")
-end
-
-@testitem "Policies" begin
-    include("policy_tests.jl")
-end
-
-@testitem "Rewards" begin
-    include("reward_tests.jl")
-end
-
-@testitem "VecEnv" begin
-    include("vec_env_tests.jl")
 end
 
 @run_package_tests

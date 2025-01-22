@@ -11,12 +11,6 @@ end
     typeof(ik) == Vector{ComplexF32} && typeof(k2) == Vector{Float32}
 end
 
-
-@test begin
-    env = RDEEnv{Float32}()
-    true
-end
-
 @test begin
     params = RDEParam{Float32}(;N=16)
     cache = RDE.PseudospectralRDECache{Float32}(params, dealias=true)

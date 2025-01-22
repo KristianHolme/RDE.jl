@@ -16,11 +16,9 @@ u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)
 ## Features
 
 - **Multiple Discretization Methods**: Supports both finite difference and pseudospectral methods for spatial discretization
-- **Reinforcement Learning Interface**: Integration with [CommonRLInterface.jl](https://github.com/JuliaReinforcementLearning/CommonRLInterface.jl)
-  - Various observation strategies (direct state, Fourier-based)
-  - Flexible action spaces (scalar pressure, stepwise control)
-  - Customizable reward functions
-  - Interactive control capabilities
+- **Interactive Visualization**: Real-time visualization of solution dynamics
+- **Flexible Parameter Control**: Easy modification of system parameters and initial conditions
+- **Analysis Tools**: Built-in functions for energy balance and chamber pressure calculations
 
 ## Installation
 
@@ -41,7 +39,6 @@ Pkg.add(url="https://github.com/KristianHolme/RDE.jl")
 
 ### Basic Usage
 
-### PDE Solving
 ```julia
 using RDE
 using GLMakie
@@ -53,30 +50,6 @@ solve_pde!(rde_prob)
 plot_solution(rde_prob)
 ```
 
-### Stepwise Control
-```julia
-# Initialize environment with parameters
-env = RDEEnv(RDEParam(tmax=500.0), dt=20.0f0)
-
-# Create stepwise policy
-π = StepwiseRDEPolicy(env, 
-    [20.0f0, 100.0f0, 200.0f0, 350.0f0],  # Time points
-    [[3.5f0, 0.64f0],                      # Control values
-     [3.5f0, 0.86f0], 
-     [3.5f0, 0.64f0], 
-     [3.5f0, 0.94f0]])
-
-# Run simulation
-data = run_policy(π, env)
-fig = plot_policy_data(env, data)
-
-# Create animation
-animate_policy_data(data, env; fname="stepwise_control", fps=60)
-```
-https://github.com/user-attachments/assets/154fcc8c-82f1-4158-95ff-5928c8c30e51
-
-
-
 ### Interactive Control
 ```julia
 using RDE, GLMakie
@@ -85,72 +58,41 @@ using RDE, GLMakie
 env, fig = interactive_control(params=RDEParam())
 ```
 
-
-## Deep Reinforcement Learning
-
-The package provides extensive support for Deep Reinforcement Learning (DRL) through integration with multiple frameworks:
-
-### Stable-Baselines3 Integration
+### Custom Initial Conditions
 ```julia
-using RDE
-using RLBridge
-using PyCall
+# Initialize with specific number of shocks
+u_init = get_n_shocks_init_func(3)  # 3 shocks
+params = RDEParam(u_init=u_init)
+prob = RDEProblem(params)
+solve_pde!(prob)
 
-# Create environment with specific parameters
-env = RDEEnv(;
-    dt=0.1,
-    τ_smooth=0.01,
-    params=RDEParam(tmax=100.0),
-    observation_strategy=FourierObservation(16),  # Fourier-based observations
-    action_type=ScalarPressureAction(),          # Control chamber pressure
-    reward_type=ShockPreservingReward(target_shock_count=3)  # Maintain 3 shocks
-)
-
-# Convert to Gym environment for SB3
-gym_env = convert_to_gym(env)
-
-# Train with PPO
-sb = pyimport("sbx") # stable_baselines jax
-model = sb.PPO("MlpPolicy", gym_env, device="cpu")
-model.learn(total_timesteps=1_000_000)
-
-# Evaluate trained policy
-policy = SBPolicy(model.policy) #wrap the python policy in a julia type
-data = run_policy(policy, env)
-plot_policy_data(env, data)
+# Or use random shock initialization
+u_init = random_shock_init_func()
+params = RDEParam(u_init=u_init)
 ```
 
-### Vectorized Environments
-For faster training, the package supports parallel environment execution:
-
+### Analysis
 ```julia
-# Create multiple environments
-envs = [RDEEnv(dt=0.1, τ_smooth=0.01) for _ in 1:8]
-vec_env = RDEVecEnv(envs)
+# Calculate energy balance
+energy = energy_balance(prob.sol.u, prob.params)
 
-# Convert to SB3 VecEnv
-sb_vec_env = convert_to_vec_env[](vec_env)
+# Calculate chamber pressure
+pressure = chamber_pressure(prob.sol.u, prob.params)
 
-# Train with vectorized environments
-model = sb.PPO("MlpPolicy", sb_vec_env)
-model.learn(total_timesteps=1_000_000)
+# Visualize results
+using GLMakie
+
+fig = Figure()
+ax1 = Axis(fig[1, 1], xlabel="t", ylabel="Energy Balance")
+ax2 = Axis(fig[2, 1], xlabel="t", ylabel="Chamber Pressure")
+
+lines!(ax1, prob.sol.t, energy)
+lines!(ax2, prob.sol.t, pressure)
+
+fig
 ```
 
-### Customizable Components
-
-#### Observation Strategies
-- `StateObservation`: Direct state observations
-- `FourierObservation`: Fourier coefficients of the state
-- `ExperimentalObservation`: Custom observation space
-
-#### Action Types
-- `ScalarPressureAction`: Control chamber pressure
-- `ScalarAreaScalarPressureAction`: Control both pressure and injectionarea
-
-#### Reward Functions
-- `ShockSpanReward`: Maximize shock wave spacing
-- `ShockPreservingReward`: Maintain specific number of shocks
-- `ExperimentalReward`: Customizable reward components
+For reinforcement learning applications with RDE systems, please see the companion package [RDE_Env.jl](https://github.com/KristianHolme/RDE_Env.jl).
 
 ## References
 
