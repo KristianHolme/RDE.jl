@@ -16,7 +16,6 @@ u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)
 ## Features
 
 - **Multiple Discretization Methods**: Supports both finite difference and pseudospectral methods for spatial discretization
-- **Interactive Visualization**: Real-time visualization of solution dynamics
 - **Flexible Parameter Control**: Easy modification of system parameters and initial conditions
 - **Analysis Tools**: Built-in functions for energy balance and chamber pressure calculations
 
@@ -48,14 +47,6 @@ params = RDEParam()
 rde_prob = RDEProblem(params)
 solve_pde!(rde_prob)
 plot_solution(rde_prob)
-```
-
-### Interactive Control
-```julia
-using RDE, GLMakie
-
-# Launch interactive control interface
-env, fig = interactive_control(params=RDEParam())
 ```
 
 ### Custom Initial Conditions
@@ -92,7 +83,7 @@ lines!(ax2, prob.sol.t, pressure)
 fig
 ```
 
-For reinforcement learning applications with RDE systems, please see the companion package [RDE_Env.jl](https://github.com/KristianHolme/RDE_Env.jl).
+For reinforcement learning applications with RDE systems or functionality for interactive control, please see the companion package [RDE_Env.jl](https://github.com/KristianHolme/RDE_Env.jl).
 
 ## References
 
