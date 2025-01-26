@@ -296,31 +296,7 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
         plotting_area_main = layout[1, 1] = GridLayout()  
         subfuncs_axes = []
     end
-    
-    # hist_β_max = Observable(maximum(β.(u_data[], s[], u_p[], params.k_param)))
-    # hist_ω_max = Observable(maximum(ω.(u_data[], params.u_c, params.α)))
-
-    # #Axes for ω, ξ, and β
-    # ω_max = @lift( maximum(ω.($u_data, params.u_c, params.α)) )
-    # ξ_max = @lift(max(1e-3, ξ($u_max, params.u_0, params.n)).*1.05)
-    # β_max = @lift(maximum(β.($u_data, $s, $u_p, params.k_param)))
-
-    # on(β_max) do val
-    #     hist_β_max[] = max(hist_β_max[], val)
-    # end
-
-    # on(ω_max) do val
-    #     hist_ω_max[] = max(hist_ω_max[], val)
-    # end
-    # ax_ω = Axis(plotting_area_subfuncs[1,1], xticksvisible=false, xlabelvisible = false,
-    #             xticklabelsvisible = false, ylabel="ω(u)",
-    #             limits=@lift((nothing, (0, max($hist_ω_max*1.05,1e-3)))))
-    # ax_ξ = Axis(plotting_area_subfuncs[2,1], xticksvisible=false, xlabelvisible = false,
-    #             xticklabelsvisible = false, ylabel="ξ(u)",
-    #             limits=@lift((nothing,(nothing,$ξ_max.*1.05))))
-    # ax_β = Axis(plotting_area_subfuncs[3,1], xlabel="x", ylabel="β(u)", limits=@lift((nothing, (0.0,max($hist_β_max*1.05, 1e-3)))))
-
-    
+        
 
     #Plotting u and λ
     ax_u = Axis(plotting_area_main[1,1], xlabel="x", ylabel="u(x, t)", title="u(x, t)", limits=@lift((nothing, (0.0,max($u_max*1.05, 1e-3)))))
@@ -333,14 +309,7 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     u_data_circle = @lift($u_data[circle_indices])
     λ_data_circle = @lift($λ_data[circle_indices])
 
-    # ω_data = @lift(ω.($u_data, params.u_c, params.α))
-    # ξ_data = @lift(ξ.($u_data, params.u_0, params.n))
-    # β_data = @lift(β.($u_data, $s, $u_p, params.k_param))
 
-    # Plot lines
-    # lines!(ax_ω, x, ω_data)
-    # lines!(ax_ξ, x, ξ_data)
-    # lines!(ax_β, x, β_data)
     lines!(ax_u, x, u_data, color=:blue)
     lines!(ax_λ, x, λ_data, color=:red)
 
