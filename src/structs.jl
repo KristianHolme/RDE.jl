@@ -96,7 +96,25 @@ Construct RDE parameters with default type Float32. See [`RDEParam{T}`](@ref) fo
 """
 RDEParam(; kwargs...) = RDEParam{Float32}(; kwargs...)
 
-
+function Base.show(io::IO, params::RDEParam)
+    println(io, "RDEParam:")
+    println(io, "  N: $(params.N)")
+    println(io, "  L: $(params.L)")
+    println(io, "  ν_1: $(params.ν_1)")
+    println(io, "  ν_2: $(params.ν_2)")
+    println(io, "  u_c: $(params.u_c)")
+    println(io, "  α: $(params.α)")
+    println(io, "  q_0: $(params.q_0)")
+    println(io, "  u_0: $(params.u_0)")
+    println(io, "  n: $(params.n)")
+    println(io, "  k_param: $(params.k_param)")
+    println(io, "  u_p: $(params.u_p)")
+    println(io, "  s: $(params.s)")
+    println(io, "  ϵ: $(params.ϵ)")
+    println(io, "  tmax: $(params.tmax)")
+    println(io, "  x0: $(params.x0)")
+    println(io, "  saveframes: $(params.saveframes)")
+end
 
 abstract type AbstractRDECache{T<:AbstractFloat} end
 
@@ -308,6 +326,19 @@ mutable struct RDEProblem{T<:AbstractFloat}
     sol::Union{Nothing, Any}
     cache::AbstractRDECache{T}
     control_shift_func::Function
+end
+
+function Base.show(io::IO, prob::RDEProblem)
+    println(io, "RDEProblem:")
+    println(io, "  params: $(prob.params)")
+    println(io, "  u0: $(typeof(prob.u0))")
+    println(io, "  λ0: $(typeof(prob.λ0))")
+    println(io, "  x: $(typeof(prob.x))")
+    println(io, "  u_init: $(prob.u_init)")
+    println(io, "  λ_init: $(prob.λ_init)")
+    println(io, "  sol: $(typeof(prob.sol))")
+    println(io, "  cache: $(typeof(prob.cache))")
+    println(io, "  control_shift_func: $(prob.control_shift_func)")
 end
 
 """

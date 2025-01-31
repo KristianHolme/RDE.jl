@@ -376,6 +376,14 @@ function random_shock_combination_init_func(x::AbstractVector; temp::Real=0.2f0)
     return shocks * weights
 end
 
+function random_shock_or_combination_init_func(x::AbstractVector; temp::Real=0.2f0)
+    if rand() < 0.5
+        return random_shock_init_func(x)
+    else
+        return random_shock_combination_init_func(x, temp=temp)
+    end
+end
+
 """
     softmax(x::AbstractVector, temp::Real=1.0) -> Vector
 
