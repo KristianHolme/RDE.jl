@@ -1,8 +1,10 @@
 # __precompile__(false)
 module RDE
     using CircularArrays
+    using DataFrames
     using FFTW
     using FileIO
+    using GLM
     using Interpolations
     using JLD2
     using LinearAlgebra
@@ -14,6 +16,7 @@ module RDE
     using ProgressMeter
     using Random
     using Statistics
+    using StatsModels
     
     using PrecompileTools
     

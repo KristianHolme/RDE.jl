@@ -336,6 +336,58 @@ const SHOCK_DATA = let
     Dict(n => load(data_file, "u$n") for n in 1:4)
 end
 
+const SHOCK_SPEED_MODEL = let
+    data_file = joinpath(@__DIR__, "..", "data", "speed_model.jld2")
+    if !isfile(data_file)
+        throw(ErrorException("Shock speed model file not found: $data_file"))
+    end
+    load_object(data_file)
+end
+
+"""
+    predict_speed(u_p::Real, n_shocks::Integer) -> Float64
+
+Predict shock wave speed for a single chamber pressure and number of shocks.
+
+# Arguments
+- `u_p::Real`: Chamber pressure
+- `n_shocks::Integer`: Number of shocks
+
+# Returns
+- `Float64`: Predicted speed
+"""
+function predict_speed(u_p::Real, n_shocks::Integer)
+    new_data = DataFrame(u_p = [u_p], shocks = [n_shocks])
+    return predict(SHOCK_SPEED_MODEL, new_data)[1]
+end
+
+function predict_speed(u_p::AbstractArray, n_shocks::Integer)
+    new_data = DataFrame(
+        u_p = collect(u_p),
+        shocks = fill(n_shocks, length(u_p))
+    )
+    return predict(SHOCK_SPEED_MODEL, new_data)
+end
+
+function predict_speed(u_p::Real, n_shocks::AbstractArray)
+    new_data = DataFrame(
+        u_p = fill(u_p, length(n_shocks)),
+        shocks = collect(n_shocks)
+    )
+    return predict(SHOCK_SPEED_MODEL, new_data)
+end
+
+function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
+    if length(u_p) != length(n_shocks)
+        throw(DimensionMismatch("Length of u_p ($(length(u_p))) must match length of n_shocks ($(length(n_shocks)))"))
+    end
+    new_data = DataFrame(
+        u_p = collect(u_p),
+        shocks = collect(n_shocks)
+    )
+    return predict(SHOCK_SPEED_MODEL, new_data)
+end
+
 function get_n_shocks_init_func(n::Int)
     if !(1 <= n <= 4)
         throw(ArgumentError("n must be between 1 and 4"))

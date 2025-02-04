@@ -114,8 +114,8 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     apply_periodic_shift!(cache.u_p_t_shifted, cache.u_p_t, shift)
     apply_periodic_shift!(cache.s_t_shifted, cache.s_t, shift)
     
-    # @debug "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
-    # @debug "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
+    # @logmsg LogLevel(-10000) "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
+    # @logmsg LogLevel(-10000) "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
 
     @turbo @. ωu = ω(u, u_c, α)
 
