@@ -21,23 +21,6 @@ function split_sol(uλ::Vector{T}) where T <: Real
     return u, λ
 end
 
-"""
-    split_sol_view(uλ::Vector{T}) where T <: Real -> Tuple{SubArray, SubArray}
-
-Split a combined state vector into views of its velocity (u) and reaction progress (λ) components.
-This version avoids allocations by returning views instead of copying the data.
-
-# Arguments
-- `uλ::Vector{T}`: Combined state vector [u; λ] of length 2N
-
-# Returns
-- `Tuple{SubArray, SubArray}`: Tuple containing views into (u, λ), each of length N
-
-# Example
-```julia
-u, λ = split_sol_view(uλ)
-```
-"""
 function split_sol_view(uλ::Vector{T}) where T <: Real
     N = Int(length(uλ)/2)
     u = @view uλ[1:N]
@@ -45,22 +28,6 @@ function split_sol_view(uλ::Vector{T}) where T <: Real
     return u, λ
 end
 
-"""
-    split_sol(uλs::Vector{Vector{T}}) where T <: Real -> Tuple{Vector{Vector{T}}, Vector{Vector{T}}}
-
-Split a vector of combined state vectors into separate vectors for velocity (u) and reaction progress (λ).
-
-# Arguments
-- `uλs::Vector{Vector{T}}`: Vector of combined state vectors
-
-# Returns
-- `Tuple{Vector{Vector{T}}, Vector{Vector{T}}}`: Tuple containing vectors of u and λ components
-
-# Example
-```julia
-us, λs = split_sol(uλs)  # Split multiple states at once
-```
-"""
 function split_sol(uλs::Vector{Vector{T}}) where T <: Real
     tuples = split_sol.(uλs)
     us = getindex.(tuples, 1)
@@ -312,21 +279,24 @@ Shift solution arrays in a moving frame with velocity c.
 - Vector of shifted solutions
 """
 function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Union{Real, AbstractArray})
-    us = CircularArray.(us)
     if c isa Real
         c = fill(c, length(ts)-1)
     end
     pos = [0.0; cumsum(c.*diff(ts))]
+    return shift_by_interdistances(us, x, ts, pos)
+end
 
+function shift_by_interdistances(us::AbstractArray, x::AbstractArray, ts::AbstractArray, pos::AbstractArray)
+    us = CircularArray.(us)
     shifted_us = similar(us)
     dx = x[2] - x[1]
-    shifted_us[1] = us[1]
-    for j in 2:length(ts)
+    for j in 1:length(ts)
         shift = Int(round(pos[j]/dx))
         shifted_us[j] = us[j][1+shift:end+shift]
     end
     return shifted_us
 end
+    
 
 const SHOCK_DATA = let
     data_file = joinpath(@__DIR__, "..", "data", "shocks.jld2")
