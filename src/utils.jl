@@ -303,8 +303,10 @@ const SHOCK_DATA = let
     if !isfile(data_file)
         throw(ErrorException("Shock data file not found: $data_file"))
     end
-    Dict(n => load(data_file, "u$n") for n in 1:4)
+    Dict(n => Dict(:u=>(load(data_file, "u$n")), :λ=>(load(data_file, "λ$n"))) for n in 1:4)
 end
+
+const SHOCK_PRESSURES = [0.5f0, 0.64f0, 0.84f0, 0.96f0]
 
 const SHOCK_SPEED_MODEL = let
     data_file = joinpath(@__DIR__, "..", "data", "speed_model.jld2")
@@ -356,54 +358,6 @@ function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
         shocks = collect(n_shocks)
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
-end
-
-function get_n_shocks_init_func(n::Int)
-    if !(1 <= n <= 4)
-        throw(ArgumentError("n must be between 1 and 4"))
-    end
-    @assert n in keys(SHOCK_DATA) "Shock data for n=$n not found"
-    wave = SHOCK_DATA[n]
-    x = range(0, 2π, length=513)[1:end-1]
-    itp = linear_interpolation(x, wave, extrapolation_bc=Periodic())
-    function u_init(x)
-        return itp(x)
-    end
-    return u_init
-end
-
-"""
-    random_shock_init_func(x::AbstractVector) -> Vector
-
-Generate a random shock initial condition.
-
-# Arguments
-- `x::AbstractVector`: Spatial grid points
-
-# Returns
-- Vector of shock initial condition values
-"""
-function random_shock_init_func(x::AbstractVector)
-    n = rand(1:4)
-    @assert n in keys(SHOCK_DATA) "Shock data for n=$n not found"
-    wave = SHOCK_DATA[n]
-    x = range(0, 2π, length=513)[1:end-1]
-    itp = linear_interpolation(x, wave, extrapolation_bc=Periodic())
-    return itp(x)
-end
-
-function random_shock_combination_init_func(x::AbstractVector; temp::Real=0.2f0)
-    shocks = hcat(SHOCK_DATA[1], SHOCK_DATA[2], SHOCK_DATA[3], SHOCK_DATA[4])
-    weights = softmax(rand(4), temp)
-    return shocks * weights
-end
-
-function random_shock_or_combination_init_func(x::AbstractVector; temp::Real=0.2f0)
-    if rand() < 0.5
-        return random_shock_init_func(x)
-    else
-        return random_shock_combination_init_func(x, temp=temp)
-    end
 end
 
 """
@@ -459,35 +413,28 @@ function apply_periodic_shift!(target::AbstractVector, source::AbstractVector, s
     return target
 end
 
-# Add smooth control function
 """
-    smooth_f(x::Real) -> Real
+    outofdomain(uλ, prob, t)
 
-Helper function for smooth control transitions. Returns exp(-1/x) for x > 0, 0 otherwise.
-"""
-smooth_f(x::Real) = x > zero(x) ? exp(-1/x) : zero(x)
-
-"""
-    smooth_g(x::Real) -> Real
-
-Helper function for smooth control transitions. Returns normalized smooth_f.
-"""
-smooth_g(x::Real) = smooth_f(x)/(smooth_f(x)+smooth_f(1-x))
-
-"""
-    smooth_control!(target, t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
-
-Apply smooth transition between control values.
+Check if the solution has left the physical domain.
 
 # Arguments
-- `target`: Array to store result
+- `uλ`: Current state [u; λ]
+- `prob`: RDE problem
 - `t`: Current time
-- `control_t`: Time of control change
-- `current_value`: Target control value
-- `previous_value`: Previous control value
-- `τ_smooth::T`: Smoothing time scale
+
+# Returns
+- `true` if solution is unphysical (u < 0 or λ ∉ [0,1])
+- `false` otherwise
 """
-function smooth_control!(target, t, control_t, current_value, previous_value, τ_smooth::T) where T <: AbstractFloat
-    progress = smooth_g((t - control_t)/τ_smooth)
-    @turbo @. target = previous_value + (current_value - previous_value) * progress
+function outofdomain(uλ, prob, t)
+    # throw(error("outofdomain testing throw"))
+    T = eltype(uλ)
+    N = prob.params.N
+    u = @view uλ[1:N]
+    λ = @view uλ[N+1:end]
+    u_out = any((u .< T(0.0)) .| (u .> T(25.0)))
+    λ_out = any((λ .< T(0.0)) .| (λ .> T(1.0)))
+    outofdomain = u_out || λ_out
+    return outofdomain
 end

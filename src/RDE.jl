@@ -29,14 +29,21 @@ module RDE
            random_shock_or_combination_init_func  
     export energy_balance, chamber_pressure
     export RDE_RHS!
+    export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod
+    export AbstractReset, Default, NShock, RandomCombination, RandomShockOrCombination
+    export AbstractControlShift, ZeroControlShift, LinearControlShift
 
     # Core simulator includes
-    include("structs.jl")
-    include("utils.jl")
-    include("solver.jl")
-    include("plotting.jl")
-    include("animations.jl")
-    include("analysis.jl")
+    include("control.jl")      # Control strategies
+    include("types.jl")        # Base types
+    include("reset.jl")        # Reset strategies
+    include("methods.jl")      # Method implementations
+    include("structs.jl")      # Problem construction
+    include("utils.jl")        # Utility functions
+    include("solver.jl")       # Solver implementation
+    include("plotting.jl")     # Plotting functions
+    include("animations.jl")   # Animation functions
+    include("analysis.jl")     # Analysis functions
 
     @compile_workload begin
         try

@@ -11,8 +11,12 @@ end
     include("utils_tests.jl")
 end
 
-@testitem "Types" begin
+@testitem "types" begin
     include("types_tests.jl")
+end
+
+@testitem "reset" begin
+    include("reset_tests.jl")
 end
 
 @run_package_tests

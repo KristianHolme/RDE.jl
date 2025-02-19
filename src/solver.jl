@@ -83,7 +83,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     n = prob.params.n
     k_param = prob.params.k_param
     
-    cache = prob.cache       # Preallocated arrays
+    cache = prob.method.cache       # Get cache from method
 
     # Extract physical components
     u = @view uλ[1:N]
@@ -91,7 +91,8 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     du = @view duλ[1:N]
     dλ = @view duλ[N+1:end]
 
-    calc_derivatives!(u, λ, prob.cache)
+    # Calculate derivatives using the method's cache
+    calc_derivatives!(u, λ, prob.method)
 
     u_x = cache.u_x
     u_xx = cache.u_xx
@@ -108,7 +109,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     
     # Calculate shift based on current time
     dx = prob.params.L / prob.params.N
-    shift = Int(round(prob.control_shift_func(u, t) / dx))
+    shift = Int(round(get_control_shift(prob.control_shift_strategy, u, t) / dx))
     
     # Apply shifts
     apply_periodic_shift!(cache.u_p_t_shifted, cache.u_p_t, shift)
@@ -130,130 +131,6 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     nothing
 end
 
-"""
-    calc_derivatives!(u::T, λ::T, cache::PseudospectralRDECache) where T <:AbstractArray
-
-Calculate spatial derivatives using pseudospectral method with FFT.
-
-# Arguments
-- `u`: Velocity field
-- `λ`: Reaction progress
-- `cache`: Pseudospectral cache containing FFT plans and workspace arrays
-
-# Implementation Notes
-- Uses in-place FFT operations
-- Applies dealiasing filter in spectral space
-- Computes first and second derivatives for u
-- Computes second derivative for λ
-- Handles periodic boundary conditions automatically
-"""
-function calc_derivatives!(u::T, λ::T, cache::PseudospectralRDECache) where T <:AbstractArray
-    ik = cache.ik             # Complex array of size N÷2+1
-    k2 = cache.k2             # Real array of size N÷2+1
-    dealias_filter = cache.dealias_filter  # Real array of size N÷2+1
-    # Preallocated arrays
-    u_hat = cache.u_hat            # Complex array of size N÷2+1
-    u_x_hat = cache.u_x_hat        # Complex array of size N÷2+1
-    u_xx_hat = cache.u_xx_hat      # Complex array of size N÷2+1
-    u_x = cache.u_x                # Real array of size N
-    u_xx = cache.u_xx              # Real array of size N
-    λ_hat = cache.λ_hat            # Complex array of size N÷2+1
-    λ_xx_hat = cache.λ_xx_hat      # Complex array of size N÷2+1
-    λ_xx = cache.λ_xx
-    
-    # Transform to spectral space (in-place)
-    mul!(u_hat, cache.fft_plan, u)  # Apply fft_plan to u, store in u_hat
-    mul!(λ_hat, cache.fft_plan, λ)
-
-    # Compute derivatives in spectral space (with dealiasing)
-    @. u_x_hat = ik * u_hat * dealias_filter
-    @. u_xx_hat = -k2 * u_hat * dealias_filter
-    @. λ_xx_hat = -k2 * λ_hat * dealias_filter
-
-    # Inverse FFT to get derivatives in physical space (in-place)
-    mul!(u_x, cache.ifft_plan, u_x_hat)
-    mul!(u_xx, cache.ifft_plan, u_xx_hat)
-    mul!(λ_xx, cache.ifft_plan, λ_xx_hat)
-    nothing
-end
-
-"""
-    calc_derivatives!(u::T, λ::T, cache::FDRDECache) where T <: AbstractArray
-
-Calculate spatial derivatives using finite difference method.
-
-# Arguments
-- `u`: Velocity field
-- `λ`: Reaction progress
-- `cache`: Finite difference cache containing grid parameters and workspace arrays
-
-# Implementation Notes
-- Uses second-order central differences
-- Handles periodic boundary conditions explicitly
-- Computes first and second derivatives for u
-- Computes second derivative for λ
-- Optimized with @turbo macro for performance
-"""
-function calc_derivatives!(u::T, λ::T, cache::FDRDECache) where T <: AbstractArray
-    dx = cache.dx
-    N = cache.N
-    inv_2dx = 1 / (2 * dx)
-    inv_dx2 = 1 / dx^2
-    
-    # Preallocated arrays
-    u_x = cache.u_x               
-    u_xx = cache.u_xx              
-    λ_xx = cache.λ_xx
-    
-    # Compute u_x using central differences with periodic boundary conditions
-    u_x[1] = (u[2] - u[N]) * inv_2dx
-    @turbo for i in 2:N-1
-        u_x[i] = (u[i+1] - u[i-1]) * inv_2dx
-    end
-    u_x[N] = (u[1] - u[N-1]) * inv_2dx
-    
-    # Compute u_xx using central differences with periodic boundary conditions
-    u_xx[1] = (u[2] - 2 * u[1] + u[N]) * inv_dx2
-    @turbo for i in 2:N-1
-        u_xx[i] = (u[i+1] - 2 * u[i] + u[i-1]) * inv_dx2
-    end
-    u_xx[N] = (u[1] - 2 * u[N] + u[N-1]) * inv_dx2
-    
-    # Compute λ_xx using central differences with periodic boundary conditions
-    λ_xx[1] = (λ[2] - 2 * λ[1] + λ[N]) * inv_dx2
-    @turbo for i in 2:N-1
-        λ_xx[i] = (λ[i+1] - 2 * λ[i] + λ[i-1]) * inv_dx2
-    end
-    λ_xx[N] = (λ[1] - 2 * λ[N] + λ[N-1]) * inv_dx2
-
-    nothing
-end
-
-"""
-    outofdomain(uλ, prob, t)
-
-Check if the solution has left the physical domain.
-
-# Arguments
-- `uλ`: Current state [u; λ]
-- `prob`: RDE problem
-- `t`: Current time
-
-# Returns
-- `true` if solution is unphysical (u < 0 or λ ∉ [0,1])
-- `false` otherwise
-"""
-function outofdomain(uλ, prob, t)
-    # throw(error("outofdomain testing throw"))
-    T = eltype(uλ)
-    N = prob.params.N
-    u = @view uλ[1:N]
-    λ = @view uλ[N+1:end]
-    u_out = any((u .< T(0.0)) .| (u .> T(25.0)))
-    λ_out = any((λ .< T(0.0)) .| (λ .> T(1.0)))
-    outofdomain = u_out || λ_out
-    return outofdomain
-end
 
 """
     solve_pde!(prob::RDEProblem; solver=Tsit5(), kwargs...)
@@ -280,11 +157,11 @@ solve_pde!(prob)
 solve_pde!(prob, solver=Rodas4())  # Use a different solver
 ```
 """
-function solve_pde!(prob::RDEProblem; solver=Tsit5(), kwargs...)
+function solve_pde!(prob::RDEProblem; solver=Tsit5(), saveframes=75, kwargs...)
     uλ_0 = vcat(prob.u0, prob.λ0)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
 
-    saveat = prob.params.tmax / prob.params.saveframes
+    saveat = prob.params.tmax / saveframes
 
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
