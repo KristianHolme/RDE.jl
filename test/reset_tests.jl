@@ -17,7 +17,7 @@ using RDE
             @test all(isfinite.(prob.u0))
             @test all(isfinite.(prob.λ0))
             @test all(0 .≤ prob.λ0 .≤ 1)
-            @test prob.params.u_p ≈ SHOCK_PRESSURES[n]
+            @test prob.params.u_p ≈ RDE.SHOCK_PRESSURES[n]
         end
 
         # Test invalid n values
@@ -32,7 +32,7 @@ using RDE
         @test all(isfinite.(prob.u0))
         @test all(isfinite.(prob.λ0))
         @test all(0 .≤ prob.λ0 .≤ 1)
-        @test 0.4f0 ≤ prob.params.u_p ≤ 0.6f0  # Reasonable range for pressure
+        @test RDE.SHOCK_PRESSURES[1] ≤ prob.params.u_p ≤ RDE.SHOCK_PRESSURES[4]  # Reasonable range for pressure
 
         # Test temperature parameter
         prob_hot = RDEProblem(RDEParam{Float32}(N=32), reset_strategy=RandomCombination(temp=1.0))
@@ -57,7 +57,7 @@ using RDE
         for _ in 1:n_trials
             prob = RDEProblem(RDEParam{Float32}(N=32), reset_strategy=prob_shock)
             # Check if the u_p matches one of the shock pressures
-            if any(abs(prob.params.u_p - p) < 1e-6 for p in SHOCK_PRESSURES)
+            if any(abs(prob.params.u_p - p) < 1e-6 for p in RDE.SHOCK_PRESSURES)
                 n_shocks += 1
             end
         end

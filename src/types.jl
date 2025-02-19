@@ -37,6 +37,7 @@ Parameters for the rotating detonation engine (RDE) model.
     tmax::T = 50.0f0            # Maximum simulation time
     x0::T = 1.0f0               # Initial position
 end
+RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
 
 # Method caches
 abstract type AbstractRDECache{T<:AbstractFloat} end
@@ -104,7 +105,7 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
 end
 
 """
-    PseudospectralRDECache{T}(params::RDEParam{T}; dealias=true) where {T<:AbstractFloat}
+    PseudospectralRDECache{T}(params::RDEParam{T}; dealias=false) where {T<:AbstractFloat}
 
 Construct a cache for pseudospectral method computations.
 
@@ -116,7 +117,7 @@ Construct a cache for pseudospectral method computations.
 - `PseudospectralRDECache{T}`: Initialized cache for computations
 """
 function PseudospectralRDECache{T}(params::RDEParam{T}; 
-        dealias=true) where {T<:AbstractFloat}
+        dealias=false) where {T<:AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
     
@@ -250,8 +251,11 @@ end
 
 Construct a pseudospectral method without initializing the cache.
 """
-PseudospectralMethod{T}(; dealias::Bool=true) where {T<:AbstractFloat} = 
+PseudospectralMethod{T}(; dealias::Bool=false) where {T<:AbstractFloat} = 
     PseudospectralMethod{T}(dealias, nothing)
+
+PseudospectralMethod(; dealias::Bool=true) = 
+    PseudospectralMethod{Float32}(dealias, nothing)
 
 
 """
