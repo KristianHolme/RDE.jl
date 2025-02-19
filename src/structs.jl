@@ -1,6 +1,6 @@
 # Display methods for RDEParam
-function Base.show(io::IO, params::RDEParam)
-    println(io, "RDEParam:")
+function Base.show(io::IO, params::RDEParam{T}) where T
+    println(io, "RDEParam{$T}:")
     println(io, "  N: $(params.N)")
     println(io, "  L: $(params.L)")
     println(io, "  ν_1: $(params.ν_1)")
@@ -21,8 +21,8 @@ end
 Base.length(params::RDEParam) = 1
 
 # Display methods for RDEProblem
-function Base.show(io::IO, prob::RDEProblem)
-    println(io, "RDEProblem:")
+function Base.show(io::IO, prob::RDEProblem{T}) where T
+    println(io, "RDEProblem{$T}:")
     println(io, "  params: $(prob.params)")
     println(io, "  u0: $(typeof(prob.u0))")
     println(io, "  λ0: $(typeof(prob.λ0))")
