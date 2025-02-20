@@ -36,6 +36,7 @@ function create_spectral_derivative_arrays(params::RDEParam{T}) where {T<:Abstra
     N_complex = div(N, 2) + 1
     k = T(2π / L) .* Vector(0:N_complex-1)
     ik = 1im .* k
+    ik[end] = zero(T)
     k2 = k .^ 2
     return ik, k2
 end
