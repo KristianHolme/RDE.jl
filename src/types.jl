@@ -301,6 +301,8 @@ end
     temp::Real = 0.2f0
 end
 
+struct RandomShock <: AbstractReset end
+
 ## Problem type
 """
     RDEProblem{T<:AbstractFloat}

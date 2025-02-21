@@ -24,6 +24,10 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::NShock)
     nothing
 end
 
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomShock)
+    reset_state_and_pressure!(prob, NShock(rand(1:4)))
+end
+
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomCombination)
     shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
     fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
