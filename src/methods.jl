@@ -140,3 +140,12 @@ function calc_derivatives!(u::T, λ::T, method::FiniteDifferenceMethod) where T 
 
     nothing
 end
+
+function reset_cache!(cache::AbstractRDECache; τ_smooth::AbstractFloat, params::RDEParam)
+    cache.τ_smooth = τ_smooth
+    cache.u_p_previous = fill(params.u_p, params.N)
+    cache.u_p_current = fill(params.u_p, params.N)
+    cache.s_previous = fill(params.s, params.N)
+    cache.s_current = fill(params.s, params.N)
+    nothing
+end
