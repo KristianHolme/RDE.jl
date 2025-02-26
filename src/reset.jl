@@ -52,3 +52,11 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomShock
     end
     nothing
 end
+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::ShiftReset)
+    reset_state_and_pressure!(prob, reset_strategy.reset_strategy)
+    shift = rand(1:length(prob.u0))
+    circshift!(prob.u0, shift)
+    circshift!(prob.λ0, shift)
+    nothing
+end

@@ -303,6 +303,10 @@ end
 
 struct RandomShock <: AbstractReset end
 
+struct ShiftReset <: AbstractReset
+    reset_strategy::AbstractReset
+end
+
 ## Problem type
 """
     RDEProblem{T<:AbstractFloat}
