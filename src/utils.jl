@@ -278,25 +278,46 @@ Shift solution arrays in a moving frame with velocity c.
 # Returns
 - Vector of shifted solutions
 """
-function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Union{Real, AbstractArray})
-    if c isa Real
-        c = fill(c, length(ts)-1)
-    end
+function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
+    c = fill(c, length(ts)-1)
     pos = [0.0; cumsum(c.*diff(ts))]
-    return shift_by_interdistances(us, x, ts, pos)
+    return shift_by_interdistances_old(us, x, pos)
 end
 
-function shift_by_interdistances(us::AbstractArray, x::AbstractArray, ts::AbstractArray, pos::AbstractArray)
+function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
+    pos = [0.0; cumsum(c.*diff(ts))]
+    return shift_by_interdistances_old(us, x, pos)
+end
+
+function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
+    c = fill(c, length(ts)-1)
+    pos = [0.0; cumsum(c.*diff(ts))]
+    return shift_by_interdistances(us, x, pos)
+end
+
+function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
+    pos = [0.0; cumsum(c.*diff(ts))]
+    return shift_by_interdistances(us, x, pos)
+end
+
+function shift_by_interdistances_old(us::AbstractArray, x::AbstractArray, pos::AbstractArray)
     us = CircularArray.(us)
     shifted_us = similar(us)
     dx = x[2] - x[1]
-    for j in 1:length(ts)
+    for j in 1:length(us)
         shift = Int(round(pos[j]/dx))
         shifted_us[j] = us[j][1+shift:end+shift]
     end
     return shifted_us
 end
-    
+
+function shift_by_interdistances(us::AbstractArray, x::AbstractArray, pos::AbstractArray)
+    shifted_us = similar(us)
+    dx = x[2] - x[1]
+    shifts = Int.(round.(pos./dx))
+    shifted_us = circshift.(us, -shifts)
+    return shifted_us
+end
 
 const SHOCK_DATA = let
     data_file = joinpath(@__DIR__, "..", "data", "shocks.jld2")
@@ -378,40 +399,6 @@ function softmax(x::AbstractVector, temp::Real=1.0)
     return exp_x ./ sum(exp_x)
 end
 
-
-"""
-    apply_periodic_shift!(target::AbstractVector, source::AbstractVector, shift::Integer) -> AbstractVector
-
-Apply a periodic shift to `source` and store the result in `target`.
-Positive shift moves elements to the left (forward in space).
-The operation is performed in-place without allocations.
-
-# Arguments
-- `target::AbstractVector`: Vector to store the shifted result
-- `source::AbstractVector`: Vector to be shifted
-- `shift::Integer`: Number of positions to shift (can be positive or negative)
-
-# Returns
-- The modified target vector
-
-# Throws
-- `AssertionError`: If target and source have different lengths
-"""
-function apply_periodic_shift!(target::AbstractVector, source::AbstractVector, shift::Integer)
-    N = length(source)
-    @assert length(target) == N "target and source must have the same length"
-    
-    shift = mod(shift, N)
-    if shift == 0
-        target .= source
-        return target
-    end
-    
-    target[1:N-shift] .= @view source[shift+1:N]
-    target[N-shift+1:N] .= @view source[1:shift]
-    
-    return target
-end
 
 """
     outofdomain(uλ, prob, t)
