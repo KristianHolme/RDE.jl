@@ -1,7 +1,15 @@
+function default_u(x)
+    return (3f0 / 2f0) .* sech.(x .- 1f0).^20f0
+end
+
+function default_λ(x)
+    return 0.5f0 .* ones(length(x))
+end
+
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::Default)
     x = prob.x
-    prob.u0 = (3f0 / 2f0) .* sech.(x .- 1f0).^20f0
-    prob.λ0 = 0.5f0 .* ones(length(x))
+    prob.u0 = default_u(x)
+    prob.λ0 = default_λ(x)
     prob.params.u_p = 0.5f0
     nothing
 end
