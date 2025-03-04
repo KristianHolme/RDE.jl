@@ -283,6 +283,88 @@ Construct a finite difference method without initializing the cache.
 FiniteDifferenceMethod{T}() where {T<:AbstractFloat} = FiniteDifferenceMethod{T}(nothing)
 FiniteDifferenceMethod() = FiniteDifferenceMethod{Float32}()
 
+"""
+    UpwindRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+
+Cache for upwind finite difference method computations in RDE solver.
+
+# Fields
+## Spatial Arrays
+- `u_x, u_xx`: Velocity derivatives
+- `λ_xx`: Reaction progress derivatives
+- `ωu, ξu, βu`: Nonlinear terms
+
+## Grid Parameters
+- `dx`: Grid spacing
+- `N`: Number of grid points
+
+## Control Parameters
+- `u_p_current, u_p_previous`: Current and previous pressure values
+- `s_current, s_previous`: Current and previous s parameter values
+- `τ_smooth`: Smoothing time scale
+- `control_time`: Time of last control update
+"""
+mutable struct UpwindRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+    u_x::Vector{T}
+    u_xx::Vector{T}
+    λ_xx::Vector{T}
+    ωu::Vector{T}
+    ξu::Vector{T}
+    βu::Vector{T}
+    dx::T
+    N::Int
+    u_p_current::Vector{T}
+    u_p_previous::Vector{T}
+    τ_smooth::T
+    s_previous::Vector{T}
+    s_current::Vector{T}
+    control_time::T
+    u_p_t::Vector{T}
+    s_t::Vector{T}
+    u_p_t_shifted::Vector{T}
+    s_t_shifted::Vector{T}
+end
+
+"""
+    UpwindMethod{T<:AbstractFloat} <: AbstractMethod
+
+Upwind finite difference method for solving RDE equations.
+
+# Fields
+- `order::Int`: Order of accuracy for the upwind scheme (1 or 2)
+- `cache::Union{Nothing, UpwindRDECache{T}}`: Computation cache for the method (initialized later)
+"""
+mutable struct UpwindMethod{T<:AbstractFloat} <: AbstractMethod
+    order::Int
+    cache::Union{Nothing, UpwindRDECache{T}}
+end
+
+function Base.show(io::IO, method::UpwindMethod{T}) where T
+    cache_status = isnothing(method.cache) ? "uninitialized" : "initialized"
+    print(io, "UpwindMethod{$T} (order: $(method.order), cache $cache_status)")
+end
+
+"""
+    UpwindMethod{T}(; order::Int=1) where {T<:AbstractFloat}
+
+Construct an upwind finite difference method without initializing the cache.
+
+# Arguments
+- `order::Int=1`: Order of accuracy for upwind discretization (1 or 2)
+"""
+UpwindMethod{T}(; order::Int=1) where {T<:AbstractFloat} = 
+    UpwindMethod{T}(order, nothing)
+
+"""
+    UpwindMethod(; order::Int=1)
+
+Construct an upwind finite difference method with default float type.
+
+# Arguments
+- `order::Int=1`: Order of accuracy for upwind discretization (1 or 2)
+"""
+UpwindMethod(; order::Int=1) = UpwindMethod{Float32}(order, nothing)
+
 ## Reset types
 abstract type AbstractReset end
 

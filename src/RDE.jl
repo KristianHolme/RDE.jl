@@ -29,7 +29,7 @@ module RDE
            random_shock_or_combination_init_func  
     export energy_balance, chamber_pressure
     export RDE_RHS!
-    export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod, reset_cache!
+    export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod, UpwindMethod, reset_cache!
     export AbstractReset, Default, NShock, RandomCombination,
            RandomShockOrCombination, RandomShock, ShiftReset
     export AbstractControlShift, ZeroControlShift, LinearControlShift
