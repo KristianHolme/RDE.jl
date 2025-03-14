@@ -173,8 +173,12 @@ Calculate the first derivative of a periodic function using a 3-point stencil.
 """
 function periodic_ddx(u::AbstractArray, dx::Real)
     d = similar(u)
-    for i in eachindex(u)
-        d[i] = (-3*u[i] + 4*u[mod1(i+1, length(u))] - u[mod1(i+2, length(u))]) / (2*dx)
+    N = length(u)
+    @turbo for i in 1:N-3
+        d[i] = (-3*u[i] + 4*u[i+1] - u[i+2]) / (2*dx)
+    end
+    @turbo for i in N-2:N
+        d[i] = (-3*u[i] + 4*u[mod1(i+1, N)] - u[mod1(i+2, N)]) / (2*dx)
     end
     return d
 end
@@ -325,6 +329,12 @@ const SHOCK_DATA = let
         throw(ErrorException("Shock data file not found: $data_file"))
     end
     Dict(n => Dict(:u=>(load(data_file, "u$n")), :λ=>(load(data_file, "λ$n"))) for n in 1:4)
+end
+
+const SHOCK_MATRICES = let
+    shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
+    fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
+    (shocks=shocks, fuels=fuels)
 end
 
 const SHOCK_PRESSURES = [0.5f0, 0.64f0, 0.84f0, 0.96f0]
