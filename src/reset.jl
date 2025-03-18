@@ -53,11 +53,6 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::NShock)
     wave = SHOCK_DATA[n][:u]
     fuel = SHOCK_DATA[n][:λ]
     pressure = SHOCK_PRESSURES[n]
-    # ref_x = range(0, 2π, length=513)[1:end-1]
-    # itp_u = linear_interpolation(ref_x, wave, extrapolation_bc=Periodic())
-    # itp_λ = linear_interpolation(ref_x, fuel, extrapolation_bc=Periodic())
-    # prob.u0 = itp_u.(prob.x)
-    # prob.λ0 = itp_λ.(prob.x)
     prob.u0 = resample_data(wave, prob.params.N)
     prob.λ0 = resample_data(fuel, prob.params.N)
     prob.params.u_p = pressure
@@ -67,24 +62,6 @@ end
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomShock)
     reset_state_and_pressure!(prob, NShock(rand(1:4)))
 end
-
-# function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomCombination)
-#     shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
-#     fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
-#     T = eltype(shocks)
-#     weights = softmax(rand(T, 4), reset_strategy.temp)
-#     wave = shocks * weights
-#     fuel = fuels * weights
-#     ref_x = range(0, 2π, length=513)[1:end-1]
-#     itp_u = linear_interpolation(ref_x, wave, extrapolation_bc=Periodic())
-#     itp_λ = linear_interpolation(ref_x, fuel, extrapolation_bc=Periodic())
-#     prob.u0 = itp_u.(prob.x)
-#     prob.λ0 = itp_λ.(prob.x)
-#     prob.params.u_p = SHOCK_PRESSURES' * weights
-#     nothing
-# end
-
-# At module level, pre-compute the matrices
 
 
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomCombination)
@@ -118,5 +95,30 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::ShiftReset)
     shift = rand(1:length(prob.u0))
     circshift!(prob.u0, shift)
     circshift!(prob.λ0, shift)
+    nothing
+end
+
+struct SineCombination <: ResetStrategy
+    modes::Vector{Int}
+end
+
+function SineCombination(;modes=2:9)
+    return SineCombination(collect(modes))
+end
+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::SineCombination)
+    x = prob.x
+    modes = reset_strategy.modes
+    shifts = rand(Float32, length(modes)) .* 2f0π
+    
+    # Create combination of sine waves
+    M = stack([sin.(Float32(i) .* x .+ shifts[ix])./(3f0*i) for (ix, i) in enumerate(modes)])
+    prob.u0 = vec(1f0 .+ max.(0f0, sum(M, dims=2)))
+    
+    # Set default lambda
+    prob.λ0 = default_λ(x)
+    
+    # Set pressure to default
+    prob.params.u_p = 0.5f0
     nothing
 end
