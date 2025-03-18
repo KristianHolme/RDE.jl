@@ -98,7 +98,7 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::ShiftReset)
     nothing
 end
 
-struct SineCombination <: ResetStrategy
+struct SineCombination <: AbstractReset
     modes::Vector{Int}
 end
 

@@ -31,7 +31,7 @@ module RDE
     export RDE_RHS!
     export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod, UpwindMethod, reset_cache!
     export AbstractReset, Default, NShock, RandomCombination,
-           RandomShockOrCombination, RandomShock, ShiftReset
+           RandomShockOrCombination, RandomShock, ShiftReset, SineCombination
     export AbstractControlShift, ZeroControlShift, LinearControlShift
 
     # Core simulator includes
