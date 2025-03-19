@@ -122,3 +122,26 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::SineCombina
     prob.params.u_p = 0.5f0
     nothing
 end
+
+struct WeightedCombination <: AbstractReset
+    weights::Vector{Float32}
+    function WeightedCombination(weights::Vector{Float32})
+        length(weights) == 4 || throw(ArgumentError("weights must have length 4"))
+        sum(weights) ≈ 1 || throw(ArgumentError("weights must sum to 1"))
+        all(w -> w >= 0, weights) || throw(ArgumentError("weights must be non-negative"))
+        new(weights)
+    end
+end
+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::WeightedCombination)
+    wave = SHOCK_MATRICES.shocks * reset_strategy.weights
+    fuel = SHOCK_MATRICES.fuels * reset_strategy.weights
+    
+    # Resample to match problem size
+    prob.u0 = resample_data(wave, prob.params.N)
+    prob.λ0 = resample_data(fuel, prob.params.N)
+    
+    # Set pressure
+    prob.params.u_p = SHOCK_PRESSURES' * reset_strategy.weights
+    return nothing
+end
