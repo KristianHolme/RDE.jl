@@ -145,3 +145,11 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::WeightedCom
     prob.params.u_p = SHOCK_PRESSURES' * reset_strategy.weights
     return nothing
 end
+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CustomPressureReset)
+    x = prob.x
+    prob.u0 = reset_strategy.f(x)
+    prob.λ0 = default_λ(x)
+    prob.params.u_p = 0.5f0
+    nothing
+end

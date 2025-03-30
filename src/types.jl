@@ -389,6 +389,10 @@ struct ShiftReset <: AbstractReset
     reset_strategy::AbstractReset
 end
 
+struct CustomPressureReset <: AbstractReset
+    f::Function
+end
+
 ## Problem type
 """
     RDEProblem{T<:AbstractFloat}
