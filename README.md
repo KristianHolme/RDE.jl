@@ -51,15 +51,14 @@ plot_solution(rde_prob)
 
 ### Custom Initial Conditions
 ```julia
-# Initialize with specific number of shocks
-u_init = get_n_shocks_init_func(3)  # 3 shocks
-params = RDEParam(u_init=u_init)
-prob = RDEProblem(params)
+reset_strategy = NShock(2)
+prob = RDEProblem(params;reset_strategy)
 solve_pde!(prob)
 
 # Or use random shock initialization
-u_init = random_shock_init_func()
-params = RDEParam(u_init=u_init)
+reset_strategy = RandomShock()
+params = RDEParam()
+prob = RDEProblem(params;reset_strategy)
 ```
 
 ### Analysis
