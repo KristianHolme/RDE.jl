@@ -153,3 +153,14 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CustomPress
     prob.params.u_p = 0.5f0
     nothing
 end
+
+@kwdef mutable struct CycleShockReset <: AbstractReset
+    n::Int = 1
+    shocks::Vector{Int} = [1, 2, 3, 4]
+end
+
+#TODO: use a cycle(iterator), but only for julia 1.11+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CycleShockReset)
+    reset_state_and_pressure!(prob, NShock(reset_strategy.shocks[mod1(reset_strategy.n, length(reset_strategy.shocks))]))
+    reset_strategy.n += 1
+end
