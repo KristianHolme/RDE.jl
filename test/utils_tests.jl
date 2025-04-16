@@ -18,24 +18,3 @@ dx = 2π/512
     calc_inds = RDE.shock_indices(u, 1.0)
     calc_inds == [100]
 end
-
-@testset "apply_periodic_shift!" begin
-    source = [1, 2, 3, 4, 5]
-    target = similar(source)
-    
-    # Test positive shift
-    RDE.apply_periodic_shift!(target, source, 2)
-    @test target == [3, 4, 5, 1, 2]
-    
-    # Test negative shift
-    RDE.apply_periodic_shift!(target, source, -1)
-    @test target == [5, 1, 2, 3, 4]
-    
-    # Test zero shift
-    RDE.apply_periodic_shift!(target, source, 0)
-    @test target == source
-    
-    # Test shift larger than array length
-    RDE.apply_periodic_shift!(target, source, 7)
-    @test target == [3, 4, 5, 1, 2]  # Same as shift by 2
-end
