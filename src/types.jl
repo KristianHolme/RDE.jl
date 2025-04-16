@@ -14,8 +14,11 @@ Parameters for the rotating detonation engine (RDE) model.
 - `u_0::T`: Parameter in ξ(u, u_0)
 - `n::Int`: Exponent in ξ(u, u_0)
 - `k_param::T`: Parameter in β(u, s)
+- `u_p::T`: Parameter in β(u, s)
 - `s::T`: Parameter in β(u, s)
 - `ϵ::T`: Small parameter in ξ(u)
+- `tmax::T`: Maximum simulation time
+- `x0::T`: Initial position
 """
 @kwdef mutable struct RDEParam{T<:AbstractFloat}
     N::Int = 512               # Number of spatial points
@@ -28,8 +31,11 @@ Parameters for the rotating detonation engine (RDE) model.
     u_0::T = 0.0f0              # Parameter in ξ(u, u_0)
     n::Int = 1                  # Exponent in ξ(u, u_0)
     k_param::T = 5.0f0          # Parameter in β(u, s)
+    u_p::T = 0.5f0              # Parameter in β(u, s)
     s::T = 3.5f0                # Parameter in β(u, s)
     ϵ::T = 0.15f0               # Small parameter in ξ(u)
+    tmax::T = 50.0f0            # Maximum simulation time
+    x0::T = 1.0f0               # Initial position
 end
 RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
 
@@ -303,23 +309,21 @@ Main problem type for the rotating detonation engine solver.
 
 # Fields
 - `params::RDEParam{T}`: Model parameters
-- `u::Vector{T}`: Initial velocity field
-- `λ::Vector{T}`: Initial reaction progress
+- `u0::Vector{T}`: Initial velocity field
+- `λ0::Vector{T}`: Initial reaction progress
 - `x::Vector{T}`: Spatial grid points
-- `method::AbstractMethod`: Numerical method
 - `reset_strategy::AbstractReset`: Reset strategy
-- `ode_problem::Union{Nothing, ODEProblem}`: ODE problem (if computed)
 - `sol::Union{Nothing, Any}`: Solution (if computed)
+- `method::AbstractMethod`: Numerical method
 - `control_shift_strategy::AbstractControlShift`: Control shift strategy
 """
 mutable struct RDEProblem{T<:AbstractFloat}
     params::RDEParam{T}
-    u::Vector{T}
-    λ::Vector{T}
+    u0::Vector{T}
+    λ0::Vector{T}
     x::Vector{T}
-    method::AbstractMethod
     reset_strategy::AbstractReset
-    ode_problem::Union{Nothing, ODEProblem}
     sol::Union{Nothing, Any}
+    method::AbstractMethod
     control_shift_strategy::AbstractControlShift
 end
