@@ -72,7 +72,7 @@ Cache for pseudospectral method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -167,7 +167,7 @@ Cache for finite difference method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -235,7 +235,7 @@ Pseudospectral method for solving RDE equations.
 - `dealias::Bool`: Whether to apply dealiasing filter
 - `cache::Union{Nothing, PseudospectralRDECache{T}}`: Computation cache for the method (initialized later)
 """
-struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
     dealias::Bool
     cache::Union{Nothing, PseudospectralRDECache{T}}
 end
@@ -266,7 +266,7 @@ Finite difference method for solving RDE equations.
 # Fields
 - `cache::Union{Nothing, FDRDECache{T}}`: Computation cache for the method (initialized later)
 """
-struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
     cache::Union{Nothing, FDRDECache{T}}
 end
 
