@@ -235,7 +235,7 @@ Pseudospectral method for solving RDE equations.
 - `dealias::Bool`: Whether to apply dealiasing filter
 - `cache::Union{Nothing, PseudospectralRDECache{T}}`: Computation cache for the method (initialized later)
 """
-struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
     dealias::Bool
     cache::Union{Nothing, PseudospectralRDECache{T}}
 end
@@ -266,7 +266,7 @@ Finite difference method for solving RDE equations.
 # Fields
 - `cache::Union{Nothing, FDRDECache{T}}`: Computation cache for the method (initialized later)
 """
-struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
     cache::Union{Nothing, FDRDECache{T}}
 end
 
