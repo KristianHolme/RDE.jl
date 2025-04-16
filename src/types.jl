@@ -14,11 +14,8 @@ Parameters for the rotating detonation engine (RDE) model.
 - `u_0::T`: Parameter in ξ(u, u_0)
 - `n::Int`: Exponent in ξ(u, u_0)
 - `k_param::T`: Parameter in β(u, s)
-- `u_p::T`: Parameter in β(u, s)
 - `s::T`: Parameter in β(u, s)
 - `ϵ::T`: Small parameter in ξ(u)
-- `tmax::T`: Maximum simulation time
-- `x0::T`: Initial position
 """
 @kwdef mutable struct RDEParam{T<:AbstractFloat}
     N::Int = 512               # Number of spatial points
@@ -31,11 +28,8 @@ Parameters for the rotating detonation engine (RDE) model.
     u_0::T = 0.0f0              # Parameter in ξ(u, u_0)
     n::Int = 1                  # Exponent in ξ(u, u_0)
     k_param::T = 5.0f0          # Parameter in β(u, s)
-    u_p::T = 0.5f0              # Parameter in β(u, s)
     s::T = 3.5f0                # Parameter in β(u, s)
     ϵ::T = 0.15f0               # Small parameter in ξ(u)
-    tmax::T = 50.0f0            # Maximum simulation time
-    x0::T = 1.0f0               # Initial position
 end
 RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
 
@@ -72,7 +66,7 @@ Cache for pseudospectral method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -167,7 +161,7 @@ Cache for finite difference method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -235,7 +229,7 @@ Pseudospectral method for solving RDE equations.
 - `dealias::Bool`: Whether to apply dealiasing filter
 - `cache::Union{Nothing, PseudospectralRDECache{T}}`: Computation cache for the method (initialized later)
 """
-mutable struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
+struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
     dealias::Bool
     cache::Union{Nothing, PseudospectralRDECache{T}}
 end
@@ -266,7 +260,7 @@ Finite difference method for solving RDE equations.
 # Fields
 - `cache::Union{Nothing, FDRDECache{T}}`: Computation cache for the method (initialized later)
 """
-mutable struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
+struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
     cache::Union{Nothing, FDRDECache{T}}
 end
 
@@ -309,21 +303,23 @@ Main problem type for the rotating detonation engine solver.
 
 # Fields
 - `params::RDEParam{T}`: Model parameters
-- `u0::Vector{T}`: Initial velocity field
-- `λ0::Vector{T}`: Initial reaction progress
+- `u::Vector{T}`: Initial velocity field
+- `λ::Vector{T}`: Initial reaction progress
 - `x::Vector{T}`: Spatial grid points
-- `reset_strategy::AbstractReset`: Reset strategy
-- `sol::Union{Nothing, Any}`: Solution (if computed)
 - `method::AbstractMethod`: Numerical method
+- `reset_strategy::AbstractReset`: Reset strategy
+- `ode_problem::Union{Nothing, ODEProblem}`: ODE problem (if computed)
+- `sol::Union{Nothing, Any}`: Solution (if computed)
 - `control_shift_strategy::AbstractControlShift`: Control shift strategy
 """
 mutable struct RDEProblem{T<:AbstractFloat}
     params::RDEParam{T}
-    u0::Vector{T}
-    λ0::Vector{T}
+    u::Vector{T}
+    λ::Vector{T}
     x::Vector{T}
-    reset_strategy::AbstractReset
-    sol::Union{Nothing, Any}
     method::AbstractMethod
+    reset_strategy::AbstractReset
+    ode_problem::Union{Nothing, ODEProblem}
+    sol::Union{Nothing, Any}
     control_shift_strategy::AbstractControlShift
-end 
+end
