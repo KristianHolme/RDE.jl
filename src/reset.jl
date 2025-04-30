@@ -155,7 +155,7 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CustomPress
 end
 
 @kwdef mutable struct CycleShockReset <: AbstractReset
-    n::Int = 1
+    n::Int = 1 #current shock index
     shocks::Vector{Int} = [1, 2, 3, 4]
 end
 
