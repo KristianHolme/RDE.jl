@@ -34,7 +34,7 @@ Compute the velocity damping function ξ(u).
 Compute the refueling function β(u).
 
 # Arguments
-- `u`: Velocity field
+- `u`: Velocity field (scalar)
 - `s`: Quenching strength parameter
 - `u_p`: Pressure parameter
 - `k`: Steepness parameter
@@ -42,7 +42,7 @@ Compute the refueling function β(u).
 # Returns
 - Refueling rate: s * u_p / (1 + exp(k * (u - u_p)))
 """
-β(u, s, u_p, k) = s .* u_p ./ (1 .+ exp.(k .* (u .- u_p)))
+β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
 
 """
     RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
@@ -129,10 +129,10 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
-    @turbo @. du = -u * u_x + (1 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+    @turbo @. du = -u * u_x + (1f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
-    @turbo @. dλ = (1 - λ) * ωu - βu * λ + ν_2 * λ_xx
-    
+    @turbo @. dλ = (1f0 - λ) * ωu - βu * λ + ν_2 * λ_xx
+
     nothing
 end
 

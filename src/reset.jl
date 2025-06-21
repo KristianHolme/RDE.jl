@@ -38,8 +38,8 @@ end
 
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::Default)
     x = prob.x
-    prob.u0 = default_u(x)
-    prob.λ0 = default_λ(x)
+    prob.u0 .= default_u(x)
+    prob.λ0 .= default_λ(x)
     prob.params.u_p = 0.5f0
     nothing
 end
@@ -53,8 +53,8 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::NShock)
     wave = SHOCK_DATA[n][:u]
     fuel = SHOCK_DATA[n][:λ]
     pressure = SHOCK_PRESSURES[n]
-    prob.u0 = resample_data(wave, prob.params.N)
-    prob.λ0 = resample_data(fuel, prob.params.N)
+    prob.u0 .= resample_data(wave, prob.params.N)
+    prob.λ0 .= resample_data(fuel, prob.params.N)
     prob.params.u_p = pressure
     nothing
 end
@@ -73,8 +73,8 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomCombi
     fuel = SHOCK_MATRICES.fuels * weights
     
     # Resample to match problem size
-    prob.u0 = resample_data(wave, prob.params.N)
-    prob.λ0 = resample_data(fuel, prob.params.N)
+    prob.u0 .= resample_data(wave, prob.params.N)
+    prob.λ0 .= resample_data(fuel, prob.params.N)
     
     # Set pressure
     prob.params.u_p = SHOCK_PRESSURES' * weights
@@ -113,7 +113,7 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::SineCombina
     
     # Create combination of sine waves
     M = stack([sin.(Float32(i) .* x .+ shifts[ix])./(3f0*i) for (ix, i) in enumerate(modes)])
-    prob.u0 = vec(1f0 .+ max.(0f0, sum(M, dims=2)))
+    prob.u0 .= vec(1f0 .+ max.(0f0, sum(M, dims=2)))
     
     # Set default lambda
     prob.λ0 = default_λ(x)
@@ -138,8 +138,8 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::WeightedCom
     fuel = SHOCK_MATRICES.fuels * reset_strategy.weights
     
     # Resample to match problem size
-    prob.u0 = resample_data(wave, prob.params.N)
-    prob.λ0 = resample_data(fuel, prob.params.N)
+    prob.u0 .= resample_data(wave, prob.params.N)
+    prob.λ0 .= resample_data(fuel, prob.params.N)
     
     # Set pressure
     prob.params.u_p = SHOCK_PRESSURES' * reset_strategy.weights
@@ -148,8 +148,8 @@ end
 
 function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CustomPressureReset)
     x = prob.x
-    prob.u0 = reset_strategy.f(x)
-    prob.λ0 = default_λ(x)
+    prob.u0 .= reset_strategy.f(x)
+    prob.λ0 .= default_λ(x)
     prob.params.u_p = 0.5f0
     nothing
 end
