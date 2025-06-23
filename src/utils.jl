@@ -229,7 +229,7 @@ function shock_locations(u::AbstractArray, dx::Real)
     backwards_block_distance = L*0.06
     backwards_block = ceil(Int, backwards_block_distance/dx)
     for i in potential_shocks
-        if any(shocks[i+1:i+backwards_block])
+        if any(@view shocks[i+1:i+backwards_block])
             shocks[i] = false
         end
     end

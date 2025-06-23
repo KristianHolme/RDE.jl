@@ -21,8 +21,8 @@ end
 Base.length(params::RDEParam) = 1
 
 # Display methods for RDEProblem
-function Base.show(io::IO, prob::RDEProblem{T}) where T
-    println(io, "RDEProblem{$T}:")
+function Base.show(io::IO, prob::RDEProblem{T, M, R, C}) where {T, M, R, C}
+    println(io, "RDEProblem{$T, $M, $R, $C}:")
     println(io, "  params: $(prob.params)")
     println(io, "  u0: $(typeof(prob.u0))")
     println(io, "  λ0: $(typeof(prob.λ0))")
@@ -47,7 +47,7 @@ Construct an RDE problem with given parameters.
 - `control_shift_strategy::AbstractControlShift = ZeroControlShift()`: Control shift strategy
 
 # Returns
-- `RDEProblem{T}`: Initialized problem
+- `RDEProblem{T, M, R, C}`: Initialized problem
 
 # Examples
 ```julia
@@ -62,9 +62,9 @@ prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=false))
 ```
 """
 function RDEProblem(params::RDEParam{T};
-    reset_strategy::AbstractReset = Default(),
-    method::AbstractMethod = FiniteDifferenceMethod{T}(),
-    control_shift_strategy::AbstractControlShift = ZeroControlShift()) where {T<:AbstractFloat}
+    reset_strategy::R = Default(),
+    method::M = FiniteDifferenceMethod{T}(),
+    control_shift_strategy::C = ZeroControlShift()) where {T<:AbstractFloat, R<:AbstractReset, M<:AbstractMethod, C<:AbstractControlShift}
 
     x = range(0, params.L, length=params.N+1)[1:end-1]
     dx = x[2] - x[1]
@@ -72,7 +72,7 @@ function RDEProblem(params::RDEParam{T};
     # Initialize the method's cache
     init_cache!(method, params, dx)
 
-    prob = RDEProblem{T}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N), 
+    prob = RDEProblem{T, M, R, C}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N), 
                          x, reset_strategy, nothing, method, control_shift_strategy)
     set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
     return prob

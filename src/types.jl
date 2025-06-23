@@ -21,7 +21,7 @@ Parameters for the rotating detonation engine (RDE) model.
 - `x0::T`: Initial position
 """
 @kwdef mutable struct RDEParam{T<:AbstractFloat}
-    N::Int = 512               # Number of spatial points
+    N::Int64 = 512               # Number of spatial points
     L::T = 2f0π                  # Domain length
     ν_1::T = 0.0075f0           # Viscosity coefficient
     ν_2::T = 0.0075f0
@@ -29,7 +29,7 @@ Parameters for the rotating detonation engine (RDE) model.
     α::T = 0.3f0                # Parameter in ω(u)
     q_0::T = 1.0f0              # Source term coefficient
     u_0::T = 0.0f0              # Parameter in ξ(u, u_0)
-    n::Int = 1                  # Exponent in ξ(u, u_0)
+    n::Int64 = 1                  # Exponent in ξ(u, u_0)
     k_param::T = 5.0f0          # Parameter in β(u, s)
     u_p::T = 0.5f0              # Parameter in β(u, s)
     s::T = 3.5f0                # Parameter in β(u, s)
@@ -175,7 +175,7 @@ mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     ξu::Vector{T}
     βu::Vector{T}
     dx::T
-    N::Int
+    N::Int64
     u_p_current::Vector{T}
     u_p_previous::Vector{T}
     τ_smooth::T
@@ -312,7 +312,7 @@ mutable struct UpwindRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     ξu::Vector{T}
     βu::Vector{T}
     dx::T
-    N::Int
+    N::Int64
     u_p_current::Vector{T}
     u_p_previous::Vector{T}
     τ_smooth::T
@@ -395,7 +395,7 @@ end
 
 ## Problem type
 """
-    RDEProblem{T<:AbstractFloat}
+    RDEProblem{T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
 
 Main problem type for the rotating detonation engine solver.
 
@@ -409,13 +409,13 @@ Main problem type for the rotating detonation engine solver.
 - `method::AbstractMethod`: Numerical method
 - `control_shift_strategy::AbstractControlShift`: Control shift strategy
 """
-mutable struct RDEProblem{T<:AbstractFloat}
+mutable struct RDEProblem{T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
     params::RDEParam{T}
     u0::Vector{T}
     λ0::Vector{T}
     x::Vector{T}
-    reset_strategy::AbstractReset
-    sol::Union{Nothing, Any}
-    method::AbstractMethod
-    control_shift_strategy::AbstractControlShift
+    reset_strategy::R
+    sol::Union{Nothing, SciMLBase.ODESolution}
+    method::M
+    control_shift_strategy::C
 end
