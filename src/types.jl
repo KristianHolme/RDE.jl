@@ -34,7 +34,7 @@ Parameters for the rotating detonation engine (RDE) model.
     u_p::T = 0.5f0              # Parameter in β(u, s)
     s::T = 3.5f0                # Parameter in β(u, s)
     ϵ::T = 0.15f0               # Small parameter in ξ(u)
-    tmax::T = 50.0f0            # Maximum simulation time
+    tmax::T = 500.0f0            # Maximum simulation time
     x0::T = 1.0f0               # Initial position
 end
 RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
