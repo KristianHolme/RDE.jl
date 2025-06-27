@@ -14,8 +14,8 @@ function get_control_shift(control_shift_strategy::LinearControlShift, u::Abstra
     return control_shift_strategy.c * t
 end
 
-function get_control_shift(control_shift_strategy::ZeroControlShift, u::AbstractVector, t::Real)
-    return 0.0
+function get_control_shift(control_shift_strategy::ZeroControlShift, u::AbstractVector{T}, t::Real) where T <: AbstractFloat
+    return zero(T)
 end 
 
 
