@@ -34,7 +34,7 @@ Parameters for the rotating detonation engine (RDE) model.
     u_p::T = 0.5f0              # Parameter in β(u, s)
     s::T = 3.5f0                # Parameter in β(u, s)
     ϵ::T = 0.15f0               # Small parameter in ξ(u)
-    tmax::T = 500.0f0            # Maximum simulation time
+    tmax::T = 500.0f0            # Maximum simulation time #TODO: move tmax to env?
     x0::T = 1.0f0               # Initial position
 end
 RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
@@ -79,7 +79,7 @@ mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
     ωu::Vector{T}
     ξu::Vector{T}
     βu::Vector{T}
-    
+
     u_hat::Vector{Complex{T}}
     u_x_hat::Vector{Complex{T}}
     u_xx_hat::Vector{Complex{T}}
@@ -116,11 +116,11 @@ Construct a cache for pseudospectral method computations.
 # Returns
 - `PseudospectralRDECache{T}`: Initialized cache for computations
 """
-function PseudospectralRDECache{T}(params::RDEParam{T}; 
-        dealias=false) where {T<:AbstractFloat}
+function PseudospectralRDECache{T}(params::RDEParam{T};
+    dealias=false) where {T<:AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
-    
+
     dealias_filter = if dealias
         create_dealiasing_vector(params)
     else
@@ -237,7 +237,7 @@ Pseudospectral method for solving RDE equations.
 """
 mutable struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
     dealias::Bool
-    cache::Union{Nothing, PseudospectralRDECache{T}}
+    cache::Union{Nothing,PseudospectralRDECache{T}}
 end
 
 function Base.show(io::IO, method::PseudospectralMethod{T}) where T
@@ -251,10 +251,10 @@ end
 
 Construct a pseudospectral method without initializing the cache.
 """
-PseudospectralMethod{T}(; dealias::Bool=false) where {T<:AbstractFloat} = 
+PseudospectralMethod{T}(; dealias::Bool=false) where {T<:AbstractFloat} =
     PseudospectralMethod{T}(dealias, nothing)
 
-PseudospectralMethod(; dealias::Bool=true) = 
+PseudospectralMethod(; dealias::Bool=true) =
     PseudospectralMethod{Float32}(dealias, nothing)
 
 
@@ -267,7 +267,7 @@ Finite difference method for solving RDE equations.
 - `cache::Union{Nothing, FDRDECache{T}}`: Computation cache for the method (initialized later)
 """
 mutable struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
-    cache::Union{Nothing, FDRDECache{T}}
+    cache::Union{Nothing,FDRDECache{T}}
 end
 
 function Base.show(io::IO, method::FiniteDifferenceMethod{T}) where T
@@ -336,7 +336,7 @@ Upwind finite difference method for solving RDE equations.
 """
 mutable struct UpwindMethod{T<:AbstractFloat} <: AbstractMethod
     order::Int
-    cache::Union{Nothing, UpwindRDECache{T}}
+    cache::Union{Nothing,UpwindRDECache{T}}
 end
 
 function Base.show(io::IO, method::UpwindMethod{T}) where T
@@ -352,7 +352,7 @@ Construct an upwind finite difference method without initializing the cache.
 # Arguments
 - `order::Int=1`: Order of accuracy for upwind discretization (1 or 2)
 """
-UpwindMethod{T}(; order::Int=1) where {T<:AbstractFloat} = 
+UpwindMethod{T}(; order::Int=1) where {T<:AbstractFloat} =
     UpwindMethod{T}(order, nothing)
 
 """
@@ -409,13 +409,13 @@ Main problem type for the rotating detonation engine solver.
 - `method::AbstractMethod`: Numerical method
 - `control_shift_strategy::AbstractControlShift`: Control shift strategy
 """
-mutable struct RDEProblem{T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+mutable struct RDEProblem{T<:AbstractFloat,M<:AbstractMethod,R<:AbstractReset,C<:AbstractControlShift}
     params::RDEParam{T}
     u0::Vector{T}
     λ0::Vector{T}
     x::Vector{T}
     reset_strategy::R
-    sol::Union{Nothing, SciMLBase.ODESolution}
+    sol::Union{Nothing,SciMLBase.ODESolution}
     method::M
     control_shift_strategy::C
 end
