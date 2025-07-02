@@ -14,21 +14,21 @@ Split a combined state vector into its velocity (u) and reaction progress (λ) c
 u, λ = split_sol(uλ)
 ```
 """
-function split_sol(uλ::Vector{T}) where T <: Real
-    N = Int(length(uλ)/2)
+function split_sol(uλ::Vector{T}) where T<:Real
+    N = Int(length(uλ) / 2)
     u = uλ[1:N]
     λ = uλ[N+1:end]
     return u, λ
 end
 
-function split_sol_view(uλ::Vector{T}) where T <: Real
-    N = Int(length(uλ)/2)
+function split_sol_view(uλ::Vector{T}) where T<:Real
+    N = Int(length(uλ) / 2)
     u = @view uλ[1:N]
     λ = @view uλ[N+1:end]
     return u, λ
 end
 
-function split_sol(uλs::Vector{Vector{T}}) where T <: Real
+function split_sol(uλs::Vector{Vector{T}}) where T<:Real
     tuples = split_sol.(uλs)
     us = getindex.(tuples, 1)
     λs = getindex.(tuples, 2)
@@ -53,7 +53,7 @@ Calculate the domain energy balance:
 
 See also: [`energy_balance(uλ::Vector{T}, params::RDEParam)`](@ref)
 """
-function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T <: Real
+function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T<:Real
     q_0 = params.q_0
     u_c = params.u_c
     α = params.α
@@ -63,7 +63,7 @@ function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T <
     L = params.L
     N = params.N
     dx = L / N
-    
+
     integrand = q_0 * (1 .- λ) .* ω.(u, u_c, α) .- ϵ * ξ.(u, u_0, n)
     simpsons_rule_integral = periodic_simpsons_rule(integrand, dx)
     return simpsons_rule_integral
@@ -97,7 +97,7 @@ Calculate energy balance from a combined state vector.
 # Returns
 - `T`: Domain energy balance value
 """
-function energy_balance(uλ::Vector{T}, params::RDEParam) where T <: Real
+function energy_balance(uλ::Vector{T}, params::RDEParam) where T<:Real
     u, λ = split_sol(uλ)
     energy_balance(u, λ, params)
 end
@@ -130,16 +130,16 @@ Calculate the mean chamber pressure from either a velocity field or combined sta
 # Returns
 - `T`: Mean chamber pressure
 """
-function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T <: Real
+function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T<:Real
     if length(uλ) != params.N
         @assert length(uλ) == 2 * params.N
-        u,  = split_sol(uλ)
+        u, = split_sol(uλ)
     else
         u = uλ
     end
     L = params.L
     dx = L / params.N
-    mean_pressure = periodic_simpsons_rule(u, dx)/L
+    mean_pressure = periodic_simpsons_rule(u, dx) / L
     return mean_pressure
 end
 
@@ -155,7 +155,7 @@ Calculate chamber pressure for multiple states.
 # Returns
 - `Vector{T}`: Vector of chamber pressures
 """
-function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T <: Real
+function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T<:Real
     [chamber_pressure(uλ, params) for uλ in uλs]
 end
 
@@ -175,10 +175,10 @@ function periodic_ddx(u::AbstractArray, dx::Real)
     d = similar(u)
     N = length(u)
     @turbo for i in 1:N-3
-        d[i] = (-3*u[i] + 4*u[i+1] - u[i+2]) / (2*dx)
+        d[i] = (-3 * u[i] + 4 * u[i+1] - u[i+2]) / (2 * dx)
     end
     @turbo for i in N-2:N
-        d[i] = (-3*u[i] + 4*u[mod1(i+1, N)] - u[mod1(i+2, N)]) / (2*dx)
+        d[i] = (-3 * u[i] + 4 * u[mod1(i + 1, N)] - u[mod1(i + 2, N)]) / (2 * dx)
     end
     return d
 end
@@ -215,19 +215,19 @@ Find the locations of shocks in a periodic function.
 """
 function shock_locations(u::AbstractArray, dx::Real)
     N = length(u)
-    L = N*dx
+    L = N * dx
     minu, maxu = extrema(u)
     span = maxu - minu
     if span < 1e-1
         return CircularArray(fill(false, N))
     end
-    threshold = span/dx*0.06
+    threshold = span / dx * 0.06
     u_diff = periodic_ddx(u, dx)
     shocks = CircularArray(-u_diff .> threshold)
     potential_shocks = findall(shocks)
 
-    backwards_block_distance = L*0.06
-    backwards_block = ceil(Int, backwards_block_distance/dx)
+    backwards_block_distance = L * 0.06
+    backwards_block = ceil(Int, backwards_block_distance / dx)
     for i in potential_shocks
         if any(@view shocks[i+1:i+backwards_block])
             shocks[i] = false
@@ -283,24 +283,24 @@ Shift solution arrays in a moving frame with velocity c.
 - Vector of shifted solutions
 """
 function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
-    c = fill(c, length(ts)-1)
-    pos = [0.0; cumsum(c.*diff(ts))]
+    c = fill(c, length(ts) - 1)
+    pos = [0.0; cumsum(c .* diff(ts))]
     return shift_by_interdistances_old(us, x, pos)
 end
 
 function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
-    pos = [0.0; cumsum(c.*diff(ts))]
+    pos = [0.0; cumsum(c .* diff(ts))]
     return shift_by_interdistances_old(us, x, pos)
 end
 
 function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
-    c = fill(c, length(ts)-1)
-    pos = [0.0; cumsum(c.*diff(ts))]
+    c = fill(c, length(ts) - 1)
+    pos = [0.0; cumsum(c .* diff(ts))]
     return shift_by_interdistances(us, x, pos)
 end
 
 function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
-    pos = [0.0; cumsum(c.*diff(ts))]
+    pos = [0.0; cumsum(c .* diff(ts))]
     return shift_by_interdistances(us, x, pos)
 end
 
@@ -309,7 +309,7 @@ function shift_by_interdistances_old(us::AbstractArray, x::AbstractArray, pos::A
     shifted_us = similar(us)
     dx = x[2] - x[1]
     for j in 1:length(us)
-        shift = Int(round(pos[j]/dx))
+        shift = Int(round(pos[j] / dx))
         shifted_us[j] = us[j][1+shift:end+shift]
     end
     return shifted_us
@@ -318,7 +318,7 @@ end
 function shift_by_interdistances(us::AbstractArray, x::AbstractArray, pos::AbstractArray)
     shifted_us = similar(us)
     dx = x[2] - x[1]
-    shifts = Int.(round.(pos./dx))
+    shifts = Int.(round.(pos ./ dx))
     shifted_us = circshift.(us, -shifts)
     return shifted_us
 end
@@ -328,7 +328,7 @@ const SHOCK_DATA = let
     if !isfile(data_file)
         throw(ErrorException("Shock data file not found: $data_file"))
     end
-    Dict(n => Dict(:u=>(load(data_file, "u$n")), :λ=>(load(data_file, "λ$n"))) for n in 1:4)
+    Dict(n => Dict(:u => (load(data_file, "u$n")), :λ => (load(data_file, "λ$n"))) for n in 1:4)
 end
 
 const SHOCK_MATRICES = let
@@ -360,22 +360,22 @@ Predict shock wave speed for a single chamber pressure and number of shocks.
 - `Float64`: Predicted speed
 """
 function predict_speed(u_p::Real, n_shocks::Integer)
-    new_data = DataFrame(u_p = [u_p], shocks = [n_shocks])
+    new_data = DataFrame(u_p=[u_p], shocks=[n_shocks])
     return predict(SHOCK_SPEED_MODEL, new_data)[1]
 end
 
 function predict_speed(u_p::AbstractArray, n_shocks::Integer)
     new_data = DataFrame(
-        u_p = collect(u_p),
-        shocks = fill(n_shocks, length(u_p))
+        u_p=collect(u_p),
+        shocks=fill(n_shocks, length(u_p))
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
 
 function predict_speed(u_p::Real, n_shocks::AbstractArray)
     new_data = DataFrame(
-        u_p = fill(u_p, length(n_shocks)),
-        shocks = collect(n_shocks)
+        u_p=fill(u_p, length(n_shocks)),
+        shocks=collect(n_shocks)
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
@@ -385,8 +385,8 @@ function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
         throw(DimensionMismatch("Length of u_p ($(length(u_p))) must match length of n_shocks ($(length(n_shocks)))"))
     end
     new_data = DataFrame(
-        u_p = collect(u_p),
-        shocks = collect(n_shocks)
+        u_p=collect(u_p),
+        shocks=collect(n_shocks)
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
@@ -424,14 +424,20 @@ Check if the solution has left the physical domain.
 - `true` if solution is unphysical (u < 0 or λ ∉ [0,1])
 - `false` otherwise
 """
-function outofdomain(uλ, prob, t)
-    # throw(error("outofdomain testing throw"))
-    T = eltype(uλ)
+function outofdomain(uλ::Vector{T}, prob, t) where T<:Real
+    # T = eltype(uλ)
     N = prob.params.N
-    u = @view uλ[1:N]
-    λ = @view uλ[N+1:end]
-    u_out = any((u .< T(0.0)) .| (u .> T(25.0)))
-    λ_out = any((λ .< T(0.0)) .| (λ .> T(1.0)))
-    outofdomain = u_out || λ_out
-    return outofdomain
+
+    # Check both u and λ values in a single loop with early return
+    @inbounds for i in 1:N
+        u_val = uλ[i]
+        λ_val = uλ[N+i]
+
+        # Short-circuit as soon as any value is out of domain
+        if u_val < zero(T) || u_val > T(25) || λ_val < zero(T) || λ_val > one(T)
+            return true
+        end
+    end
+
+    return false
 end
