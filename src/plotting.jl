@@ -103,7 +103,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     sld = Slider(play_ctrl_area[1, 1], range=1:num_times, startvalue=1)
     on(sld.value) do val
         time_idx[] = Int(round(val))
-        @info "SLIDER ACTIVATED"
+        # @info "SLIDER ACTIVATED"
     end
 
     # Button area
