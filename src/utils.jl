@@ -326,15 +326,27 @@ end
 const SHOCK_DATA = let
     data_file = joinpath(@__DIR__, "..", "data", "shocks.jld2")
     if !isfile(data_file)
-        throw(ErrorException("Shock data file not found: $data_file"))
+        # throw(ErrorException("Shock data file not found: $data_file"))
+        @warn "Shock data file not found: $data_file"
+        return nothing
     end
-    Dict(n => Dict(:u => (load(data_file, "u$n")), :λ => (load(data_file, "λ$n"))) for n in 1:4)
+    try
+        Dict(n => Dict(:u => (load(data_file, "u$n")), :λ => (load(data_file, "λ$n"))) for n in 1:4)
+    catch e
+        @warn "Failed to load shock data: $e"
+        return nothing
+    end
 end
 
 const SHOCK_MATRICES = let
-    shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
-    fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
-    (shocks=shocks, fuels=fuels)
+    if !@isdefined(SHOCK_DATA) || (@isdefined(SHOCK_DATA) && SHOCK_DATA === nothing)
+        @warn "SHOCK_DATA not available, returning empty shock matrices"
+        (shocks=zeros(Float64, 0, 0), fuels=zeros(Float64, 0, 0))
+    else
+        shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
+        fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
+        (shocks=shocks, fuels=fuels)
+    end
 end
 
 const SHOCK_PRESSURES = [0.5f0, 0.64f0, 0.84f0, 0.96f0]
@@ -342,9 +354,15 @@ const SHOCK_PRESSURES = [0.5f0, 0.64f0, 0.84f0, 0.96f0]
 const SHOCK_SPEED_MODEL = let
     data_file = joinpath(@__DIR__, "..", "data", "speed_model.jld2")
     if !isfile(data_file)
-        throw(ErrorException("Shock speed model file not found: $data_file"))
+        @warn "Shock speed model file not found: $data_file"
+        return nothing
     end
-    load_object(data_file)
+    try
+        load_object(data_file)
+    catch e
+        @warn "Failed to load shock speed model: $e"
+        return nothing
+    end
 end
 
 """
