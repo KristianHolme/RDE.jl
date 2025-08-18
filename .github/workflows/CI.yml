@@ -30,6 +30,11 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v4
+      - name: Print working directory and list files
+        run: |
+          pwd
+          ls -l
+          ls -l data
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
