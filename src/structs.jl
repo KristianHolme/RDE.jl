@@ -1,5 +1,5 @@
 # Display methods for RDEParam
-function Base.show(io::IO, params::RDEParam{T}) where T
+function Base.show(io::IO, params::RDEParam{T}) where {T}
     println(io, "RDEParam{$T}:")
     println(io, "  N: $(params.N)")
     println(io, "  L: $(params.L)")
@@ -15,13 +15,13 @@ function Base.show(io::IO, params::RDEParam{T}) where T
     println(io, "  s: $(params.s)")
     println(io, "  ϵ: $(params.ϵ)")
     println(io, "  tmax: $(params.tmax)")
-    println(io, "  x0: $(params.x0)")
+    return println(io, "  x0: $(params.x0)")
 end
 
 Base.length(params::RDEParam) = 1
 
 # Display methods for RDEProblem
-function Base.show(io::IO, prob::RDEProblem{T,M,R,C}) where {T,M,R,C}
+function Base.show(io::IO, prob::RDEProblem{T, M, R, C}) where {T, M, R, C}
     println(io, "RDEProblem{$T, $M, $R, $C}:")
     println(io, "  params: $(prob.params)")
     println(io, "  u0: $(typeof(prob.u0))")
@@ -30,11 +30,11 @@ function Base.show(io::IO, prob::RDEProblem{T,M,R,C}) where {T,M,R,C}
     println(io, "  reset_strategy: $(prob.reset_strategy)")
     println(io, "  sol: $(typeof(prob.sol))")
     println(io, "  method: $(prob.method)")
-    println(io, "  control_shift_strategy: $(prob.control_shift_strategy)")
+    return println(io, "  control_shift_strategy: $(prob.control_shift_strategy)")
 end
 
-function get_RDE_grid(L::T, N::Int) where T<:AbstractFloat
-    x = range(0, L, length=N + 1)[1:end-1]
+function get_RDE_grid(L::T, N::Int) where {T <: AbstractFloat}
+    x = range(0, L, length = N + 1)[1:(end - 1)]
     dx = x[2] - x[1]
     return x, dx
 end
@@ -67,18 +67,22 @@ prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=true))
 prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=false))
 ```
 """
-function RDEProblem(params::RDEParam{T};
-    reset_strategy::R=Default(),
-    method::M=FiniteDifferenceMethod{T}(),
-    control_shift_strategy::C=ZeroControlShift()) where {T<:AbstractFloat,R<:AbstractReset,M<:AbstractMethod,C<:AbstractControlShift}
+function RDEProblem(
+        params::RDEParam{T};
+        reset_strategy::R = Default(),
+        method::M = FiniteDifferenceMethod{T}(),
+        control_shift_strategy::C = ZeroControlShift()
+    ) where {T <: AbstractFloat, R <: AbstractReset, M <: AbstractMethod, C <: AbstractControlShift}
 
     x, dx = get_RDE_grid(params.L, params.N)
 
     # Initialize the method's cache
     init_cache!(method, params, dx)
 
-    prob = RDEProblem{T,M,R,C}(params, Vector{T}(undef, params.N), Vector{T}(undef, params.N),
-        x, reset_strategy, nothing, method, control_shift_strategy)
+    prob = RDEProblem{T, M, R, C}(
+        params, Vector{T}(undef, params.N), Vector{T}(undef, params.N),
+        x, reset_strategy, nothing, method, control_shift_strategy
+    )
     set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
     return prob
 end
@@ -91,5 +95,5 @@ Initialize the state vectors of an RDE problem using the initialization function
 function set_init_state!(prob::RDEProblem)
     reset_state_and_pressure!(prob, prob.reset_strategy)
     @assert all(isfinite.(prob.u0)) "NaN or Inf values detected in u0"
-    @assert all(isfinite.(prob.λ0)) "NaN or Inf values detected in λ0"
+    return @assert all(isfinite.(prob.λ0)) "NaN or Inf values detected in λ0"
 end

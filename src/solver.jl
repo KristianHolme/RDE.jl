@@ -26,7 +26,7 @@ Compute the velocity damping function ξ(u).
 # Returns
 - Damping value: (u_0 - u) * u^n
 """
-ξ(u, u_0, n) = (u_0 - u) * u^n 
+ξ(u, u_0, n) = (u_0 - u) * u^n
 
 """
     β(u, s, u_p, k)
@@ -82,14 +82,14 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     u_0 = prob.params.u_0
     n = prob.params.n
     k_param = prob.params.k_param
-    
+
     cache = prob.method.cache       # Get cache from method
 
     # Extract physical components
     u = @view uλ[1:N]
-    λ = @view uλ[N+1:end]
+    λ = @view uλ[(N + 1):end]
     du = @view duλ[1:N]
-    dλ = @view duλ[N+1:end]
+    dλ = @view duλ[(N + 1):end]
 
     # Calculate derivatives using the method's cache
     calc_derivatives!(u, λ, prob.method)
@@ -106,20 +106,20 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     # Update control values with smooth transition
     smooth_control!(u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
     smooth_control!(s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
-    
+
     # Calculate shift based on current time
     dx = prob.params.L / prob.params.N
     shift = Int(round(get_control_shift(prob.control_shift_strategy, u, t) / dx))
-    
+
     # Apply shifts
     if shift != 0
         circshift!(cache.u_p_t_shifted, cache.u_p_t, -shift)
         circshift!(cache.s_t_shifted, cache.s_t, -shift)
-    else    
+    else
         cache.u_p_t_shifted .= cache.u_p_t
         cache.s_t_shifted .= cache.s_t
     end
-    
+
     # @logmsg LogLevel(-10000) "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
     # @logmsg LogLevel(-10000) "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
 
@@ -129,11 +129,11 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
-    @turbo @. du = -u * u_x + (1f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+    @turbo @. du = -u * u_x + (1.0f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
-    @turbo @. dλ = (1f0 - λ) * ωu - βu * λ + ν_2 * λ_xx
+    @turbo @. dλ = (1.0f0 - λ) * ωu - βu * λ + ν_2 * λ_xx
 
-    nothing
+    return nothing
 end
 
 
@@ -162,7 +162,7 @@ solve_pde!(prob)
 solve_pde!(prob, solver=Rodas4())  # Use a different solver
 ```
 """
-function solve_pde!(prob::RDEProblem; solver=Tsit5(), saveframes=75, kwargs...)
+function solve_pde!(prob::RDEProblem; solver = Tsit5(), saveframes = 75, kwargs...)
     uλ_0 = vcat(prob.u0, prob.λ0)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
 
@@ -170,10 +170,10 @@ function solve_pde!(prob::RDEProblem; solver=Tsit5(), saveframes=75, kwargs...)
 
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
-    sol = OrdinaryDiffEq.solve(prob_ode, solver; saveat=saveat, isoutofdomain=outofdomain, kwargs...)
+    sol = OrdinaryDiffEq.solve(prob_ode, solver; saveat = saveat, isoutofdomain = outofdomain, kwargs...)
     if sol.retcode != :Success
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
-    prob.sol = sol
+    return prob.sol = sol
 end

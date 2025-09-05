@@ -20,9 +20,9 @@ Parameters for the rotating detonation engine (RDE) model.
 - `tmax::T`: Maximum simulation time
 - `x0::T`: Initial position
 """
-@kwdef mutable struct RDEParam{T<:AbstractFloat}
+@kwdef mutable struct RDEParam{T <: AbstractFloat}
     N::Int64 = 512               # Number of spatial points
-    L::T = 2f0π                  # Domain length
+    L::T = 2.0f0π                  # Domain length
     ν_1::T = 0.0075f0           # Viscosity coefficient
     ν_2::T = 0.0075f0
     u_c::T = 1.1f0              # Parameter in ω(u)
@@ -40,7 +40,7 @@ end
 RDEParam(args...; kwargs...) = RDEParam{Float32}(args...; kwargs...)
 
 # Method caches
-abstract type AbstractRDECache{T<:AbstractFloat} end
+abstract type AbstractRDECache{T <: AbstractFloat} end
 
 """
     PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
@@ -72,7 +72,7 @@ Cache for pseudospectral method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-mutable struct PseudospectralRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+mutable struct PseudospectralRDECache{T <: AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -116,8 +116,10 @@ Construct a cache for pseudospectral method computations.
 # Returns
 - `PseudospectralRDECache{T}`: Initialized cache for computations
 """
-function PseudospectralRDECache{T}(params::RDEParam{T};
-    dealias=false) where {T<:AbstractFloat}
+function PseudospectralRDECache{T}(
+        params::RDEParam{T};
+        dealias = false
+    ) where {T <: AbstractFloat}
     N = params.N
     N_complex = div(N, 2) + 1
 
@@ -129,11 +131,11 @@ function PseudospectralRDECache{T}(params::RDEParam{T};
 
     ik, k2 = create_spectral_derivative_arrays(params)
 
-    PseudospectralRDECache{T}(
+    return PseudospectralRDECache{T}(
         [Vector{T}(undef, N) for _ in 1:6]...,
         [Vector{Complex{T}}(undef, N_complex) for _ in 1:5]...,
-        plan_rfft(Vector{T}(undef, N), flags=FFTW.MEASURE),
-        plan_irfft(Vector{Complex{T}}(undef, N_complex), N, flags=FFTW.MEASURE),
+        plan_rfft(Vector{T}(undef, N), flags = FFTW.MEASURE),
+        plan_irfft(Vector{Complex{T}}(undef, N_complex), N, flags = FFTW.MEASURE),
         dealias_filter,
         ik, k2,
         fill(params.u_p, N), fill(params.u_p, N), T(1),
@@ -167,7 +169,7 @@ Cache for finite difference method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-mutable struct FDRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+mutable struct FDRDECache{T <: AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -200,9 +202,9 @@ Construct a cache for finite difference method computations.
 # Returns
 - `FDRDECache{T}`: Initialized cache for computations
 """
-function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
     N = params.N
-    FDRDECache{T}(
+    return FDRDECache{T}(
         Vector{T}(undef, N),  # u_x
         Vector{T}(undef, N),  # u_xx
         Vector{T}(undef, N),  # λ_xx
@@ -235,15 +237,15 @@ Pseudospectral method for solving RDE equations.
 - `dealias::Bool`: Whether to apply dealiasing filter
 - `cache::Union{Nothing, PseudospectralRDECache{T}}`: Computation cache for the method (initialized later)
 """
-mutable struct PseudospectralMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct PseudospectralMethod{T <: AbstractFloat} <: AbstractMethod
     dealias::Bool
-    cache::Union{Nothing,PseudospectralRDECache{T}}
+    cache::Union{Nothing, PseudospectralRDECache{T}}
 end
 
-function Base.show(io::IO, method::PseudospectralMethod{T}) where T
+function Base.show(io::IO, method::PseudospectralMethod{T}) where {T}
     cache_status = isnothing(method.cache) ? "uninitialized" : "initialized"
     dealias_status = method.dealias ? "with" : "without"
-    print(io, "PseudospectralMethod{$T} ($dealias_status dealiasing, cache $cache_status)")
+    return print(io, "PseudospectralMethod{$T} ($dealias_status dealiasing, cache $cache_status)")
 end
 
 """
@@ -251,10 +253,10 @@ end
 
 Construct a pseudospectral method without initializing the cache.
 """
-PseudospectralMethod{T}(; dealias::Bool=false) where {T<:AbstractFloat} =
+PseudospectralMethod{T}(; dealias::Bool = false) where {T <: AbstractFloat} =
     PseudospectralMethod{T}(dealias, nothing)
 
-PseudospectralMethod(; dealias::Bool=true) =
+PseudospectralMethod(; dealias::Bool = true) =
     PseudospectralMethod{Float32}(dealias, nothing)
 
 
@@ -266,13 +268,13 @@ Finite difference method for solving RDE equations.
 # Fields
 - `cache::Union{Nothing, FDRDECache{T}}`: Computation cache for the method (initialized later)
 """
-mutable struct FiniteDifferenceMethod{T<:AbstractFloat} <: AbstractMethod
-    cache::Union{Nothing,FDRDECache{T}}
+mutable struct FiniteDifferenceMethod{T <: AbstractFloat} <: AbstractMethod
+    cache::Union{Nothing, FDRDECache{T}}
 end
 
-function Base.show(io::IO, method::FiniteDifferenceMethod{T}) where T
+function Base.show(io::IO, method::FiniteDifferenceMethod{T}) where {T}
     cache_status = isnothing(method.cache) ? "uninitialized" : "initialized"
-    print(io, "FiniteDifferenceMethod{$T} (cache $cache_status)")
+    return print(io, "FiniteDifferenceMethod{$T} (cache $cache_status)")
 end
 
 """
@@ -280,7 +282,7 @@ end
 
 Construct a finite difference method without initializing the cache.
 """
-FiniteDifferenceMethod{T}() where {T<:AbstractFloat} = FiniteDifferenceMethod{T}(nothing)
+FiniteDifferenceMethod{T}() where {T <: AbstractFloat} = FiniteDifferenceMethod{T}(nothing)
 FiniteDifferenceMethod() = FiniteDifferenceMethod{Float32}()
 
 """
@@ -304,7 +306,7 @@ Cache for upwind finite difference method computations in RDE solver.
 - `τ_smooth`: Smoothing time scale
 - `control_time`: Time of last control update
 """
-mutable struct UpwindRDECache{T<:AbstractFloat} <: AbstractRDECache{T}
+mutable struct UpwindRDECache{T <: AbstractFloat} <: AbstractRDECache{T}
     u_x::Vector{T}
     u_xx::Vector{T}
     λ_xx::Vector{T}
@@ -334,14 +336,14 @@ Upwind finite difference method for solving RDE equations.
 - `order::Int`: Order of accuracy for the upwind scheme (1 or 2)
 - `cache::Union{Nothing, UpwindRDECache{T}}`: Computation cache for the method (initialized later)
 """
-mutable struct UpwindMethod{T<:AbstractFloat} <: AbstractMethod
+mutable struct UpwindMethod{T <: AbstractFloat} <: AbstractMethod
     order::Int
-    cache::Union{Nothing,UpwindRDECache{T}}
+    cache::Union{Nothing, UpwindRDECache{T}}
 end
 
-function Base.show(io::IO, method::UpwindMethod{T}) where T
+function Base.show(io::IO, method::UpwindMethod{T}) where {T}
     cache_status = isnothing(method.cache) ? "uninitialized" : "initialized"
-    print(io, "UpwindMethod{$T} (order: $(method.order), cache $cache_status)")
+    return print(io, "UpwindMethod{$T} (order: $(method.order), cache $cache_status)")
 end
 
 """
@@ -352,7 +354,7 @@ Construct an upwind finite difference method without initializing the cache.
 # Arguments
 - `order::Int=1`: Order of accuracy for upwind discretization (1 or 2)
 """
-UpwindMethod{T}(; order::Int=1) where {T<:AbstractFloat} =
+UpwindMethod{T}(; order::Int = 1) where {T <: AbstractFloat} =
     UpwindMethod{T}(order, nothing)
 
 """
@@ -363,7 +365,7 @@ Construct an upwind finite difference method with default float type.
 # Arguments
 - `order::Int=1`: Order of accuracy for upwind discretization (1 or 2)
 """
-UpwindMethod(; order::Int=1) = UpwindMethod{Float32}(order, nothing)
+UpwindMethod(; order::Int = 1) = UpwindMethod{Float32}(order, nothing)
 
 ## Reset types
 abstract type AbstractReset end
@@ -409,13 +411,13 @@ Main problem type for the rotating detonation engine solver.
 - `method::AbstractMethod`: Numerical method
 - `control_shift_strategy::AbstractControlShift`: Control shift strategy
 """
-mutable struct RDEProblem{T<:AbstractFloat,M<:AbstractMethod,R<:AbstractReset,C<:AbstractControlShift}
+mutable struct RDEProblem{T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     params::RDEParam{T}
     u0::Vector{T}
     λ0::Vector{T}
     x::Vector{T}
     reset_strategy::R
-    sol::Union{Nothing,SciMLBase.ODESolution}
+    sol::Union{Nothing, SciMLBase.ODESolution}
     method::M
     control_shift_strategy::C
 end

@@ -14,21 +14,21 @@ Split a combined state vector into its velocity (u) and reaction progress (λ) c
 u, λ = split_sol(uλ)
 ```
 """
-function split_sol(uλ::Vector{T}) where T<:Real
+function split_sol(uλ::Vector{T}) where {T <: Real}
     N = Int(length(uλ) / 2)
     u = uλ[1:N]
-    λ = uλ[N+1:end]
+    λ = uλ[(N + 1):end]
     return u, λ
 end
 
-function split_sol_view(uλ::Vector{T}) where T<:Real
+function split_sol_view(uλ::Vector{T}) where {T <: Real}
     N = Int(length(uλ) / 2)
     u = @view uλ[1:N]
-    λ = @view uλ[N+1:end]
+    λ = @view uλ[(N + 1):end]
     return u, λ
 end
 
-function split_sol(uλs::Vector{Vector{T}}) where T<:Real
+function split_sol(uλs::Vector{Vector{T}}) where {T <: Real}
     tuples = split_sol.(uλs)
     us = getindex.(tuples, 1)
     λs = getindex.(tuples, 2)
@@ -53,7 +53,7 @@ Calculate the domain energy balance:
 
 See also: [`energy_balance(uλ::Vector{T}, params::RDEParam)`](@ref)
 """
-function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where T<:Real
+function energy_balance(u::Vector{T}, λ::Vector{T}, params::RDEParam) where {T <: Real}
     q_0 = params.q_0
     u_c = params.u_c
     α = params.α
@@ -81,8 +81,8 @@ Compute the integral of a periodic function using Simpson's rule.
 # Returns
 - `T`: Integral value
 """
-function periodic_simpsons_rule(u::Vector{T}, dx::T) where {T<:Real}
-    dx / 3 * sum((2 * u[1:2:end] + 4 * u[2:2:end]))
+function periodic_simpsons_rule(u::Vector{T}, dx::T) where {T <: Real}
+    return dx / 3 * sum((2 * u[1:2:end] + 4 * u[2:2:end]))
 end
 
 """
@@ -97,9 +97,9 @@ Calculate energy balance from a combined state vector.
 # Returns
 - `T`: Domain energy balance value
 """
-function energy_balance(uλ::Vector{T}, params::RDEParam) where T<:Real
+function energy_balance(uλ::Vector{T}, params::RDEParam) where {T <: Real}
     u, λ = split_sol(uλ)
-    energy_balance(u, λ, params)
+    return energy_balance(u, λ, params)
 end
 
 """
@@ -114,8 +114,8 @@ Calculate energy balance for multiple states.
 # Returns
 - `Vector{T}`: Vector of energy balance values
 """
-function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T<:Real}
-    energy_balance.(uλs, Ref(params))
+function energy_balance(uλs::Vector{Vector{T}}, params::RDEParam) where {T <: Real}
+    return energy_balance.(uλs, Ref(params))
 end
 
 """
@@ -130,7 +130,7 @@ Calculate the mean chamber pressure from either a velocity field or combined sta
 # Returns
 - `T`: Mean chamber pressure
 """
-function chamber_pressure(uλ::Vector{T}, params::RDEParam;) where T<:Real
+function chamber_pressure(uλ::Vector{T}, params::RDEParam) where {T <: Real}
     if length(uλ) != params.N
         @assert length(uλ) == 2 * params.N
         u, = split_sol(uλ)
@@ -155,8 +155,8 @@ Calculate chamber pressure for multiple states.
 # Returns
 - `Vector{T}`: Vector of chamber pressures
 """
-function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where T<:Real
-    [chamber_pressure(uλ, params) for uλ in uλs]
+function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where {T <: Real}
+    return [chamber_pressure(uλ, params) for uλ in uλs]
 end
 
 """
@@ -174,10 +174,10 @@ Calculate the first derivative of a periodic function using a 3-point stencil.
 function periodic_ddx(u::AbstractArray, dx::Real)
     d = similar(u)
     N = length(u)
-    @turbo for i in 1:N-3
-        d[i] = (-3 * u[i] + 4 * u[i+1] - u[i+2]) / (2 * dx)
+    @turbo for i in 1:(N - 3)
+        d[i] = (-3 * u[i] + 4 * u[i + 1] - u[i + 2]) / (2 * dx)
     end
-    @turbo for i in N-2:N
+    @turbo for i in (N - 2):N
         d[i] = (-3 * u[i] + 4 * u[mod1(i + 1, N)] - u[mod1(i + 2, N)]) / (2 * dx)
     end
     return d
@@ -218,7 +218,7 @@ function shock_locations(u::AbstractArray, dx::Real)
     L = N * dx
     minu, maxu = extrema(u)
     span = maxu - minu
-    if span < 1e-1
+    if span < 1.0e-1
         return CircularArray(fill(false, N))
     end
     threshold = span / dx * 0.06
@@ -229,7 +229,7 @@ function shock_locations(u::AbstractArray, dx::Real)
     backwards_block_distance = L * 0.06
     backwards_block = ceil(Int, backwards_block_distance / dx)
     for i in potential_shocks
-        if any(@view shocks[i+1:i+backwards_block])
+        if any(@view shocks[(i + 1):(i + backwards_block)])
             shocks[i] = false
         end
     end
@@ -310,7 +310,7 @@ function shift_by_interdistances_old(us::AbstractArray, x::AbstractArray, pos::A
     dx = x[2] - x[1]
     for j in 1:length(us)
         shift = Int(round(pos[j] / dx))
-        shifted_us[j] = us[j][1+shift:end+shift]
+        shifted_us[j] = us[j][(1 + shift):(end + shift)]
     end
     return shifted_us
 end
@@ -341,11 +341,11 @@ end
 const SHOCK_MATRICES = let
     if !@isdefined(SHOCK_DATA) || (@isdefined(SHOCK_DATA) && SHOCK_DATA === nothing)
         @warn "SHOCK_DATA not available, returning empty shock matrices"
-        (shocks=zeros(Float64, 0, 0), fuels=zeros(Float64, 0, 0))
+        (shocks = zeros(Float64, 0, 0), fuels = zeros(Float64, 0, 0))
     else
         shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
         fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
-        (shocks=shocks, fuels=fuels)
+        (shocks = shocks, fuels = fuels)
     end
 end
 
@@ -378,22 +378,22 @@ Predict shock wave speed for a single chamber pressure and number of shocks.
 - `Float64`: Predicted speed
 """
 function predict_speed(u_p::Real, n_shocks::Integer)
-    new_data = DataFrame(u_p=[u_p], shocks=[n_shocks])
+    new_data = DataFrame(u_p = [u_p], shocks = [n_shocks])
     return predict(SHOCK_SPEED_MODEL, new_data)[1]
 end
 
 function predict_speed(u_p::AbstractArray, n_shocks::Integer)
     new_data = DataFrame(
-        u_p=collect(u_p),
-        shocks=fill(n_shocks, length(u_p))
+        u_p = collect(u_p),
+        shocks = fill(n_shocks, length(u_p))
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
 
 function predict_speed(u_p::Real, n_shocks::AbstractArray)
     new_data = DataFrame(
-        u_p=fill(u_p, length(n_shocks)),
-        shocks=collect(n_shocks)
+        u_p = fill(u_p, length(n_shocks)),
+        shocks = collect(n_shocks)
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
@@ -403,8 +403,8 @@ function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
         throw(DimensionMismatch("Length of u_p ($(length(u_p))) must match length of n_shocks ($(length(n_shocks)))"))
     end
     new_data = DataFrame(
-        u_p=collect(u_p),
-        shocks=collect(n_shocks)
+        u_p = collect(u_p),
+        shocks = collect(n_shocks)
     )
     return predict(SHOCK_SPEED_MODEL, new_data)
 end
@@ -421,7 +421,7 @@ Compute the softmax of a vector with temperature scaling.
 # Returns
 - Vector of same length as input containing softmax probabilities
 """
-function softmax(x::AbstractVector, temp::Real=1.0)
+function softmax(x::AbstractVector, temp::Real = 1.0)
     x_scaled = x ./ temp
     exp_x = exp.(x_scaled .- maximum(x_scaled))
     return exp_x ./ sum(exp_x)
@@ -442,14 +442,14 @@ Check if the solution has left the physical domain.
 - `true` if solution is unphysical (u < 0 or λ ∉ [0,1])
 - `false` otherwise
 """
-function outofdomain(uλ::Vector{T}, prob, t) where T<:Real
+function outofdomain(uλ::Vector{T}, prob, t) where {T <: Real}
     # T = eltype(uλ)
     N = prob.params.N
 
     # Check both u and λ values in a single loop with early return
     @inbounds for i in 1:N
         u_val = uλ[i]
-        λ_val = uλ[N+i]
+        λ_val = uλ[N + i]
 
         # Short-circuit as soon as any value is out of domain
         if u_val < zero(T) || u_val > T(25) || λ_val < zero(T) || λ_val > one(T)

@@ -50,7 +50,7 @@ include("analysis.jl")     # Analysis functions
 @compile_workload begin
     try
         # Simulate tiny case for a short time
-        prob = RDEProblem(RDEParam(; N=64, tmax=0.01))
+        prob = RDEProblem(RDEParam(; N = 64, tmax = 0.01))
         solve_pde!(prob)
     catch e
         @warn "Precompilation failure: $e"

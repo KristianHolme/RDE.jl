@@ -5,7 +5,7 @@ using OrdinaryDiffEq
 @testset "Solver Tests" begin
     @testset "Basic Solver" begin
         for T in [Float32, Float64]
-            prob = RDEProblem(RDEParam{T}(N=512, tmax=0.01))
+            prob = RDEProblem(RDEParam{T}(N = 512, tmax = 0.01))
             solve_pde!(prob)
             @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
         end
@@ -13,8 +13,10 @@ using OrdinaryDiffEq
 
     @testset "FFT Plans" begin
         for T in [Float32, Float64]
-            prob = RDEProblem(RDEParam{T}(N=128, tmax=5.0), 
-                            method=PseudospectralMethod{T}())
+            prob = RDEProblem(
+                RDEParam{T}(N = 128, tmax = 5.0),
+                method = PseudospectralMethod{T}()
+            )
             cache = prob.method.cache
             u0 = prob.u0
             u0_hat = cache.fft_plan * u0
@@ -62,36 +64,33 @@ using OrdinaryDiffEq
     @testset "Long Integration" begin
         for T in [Float32, Float64]
             # Test finite difference method
-            prob_fd = RDEProblem(RDEParam{T}(N=512, tmax=5.0))
+            prob_fd = RDEProblem(RDEParam{T}(N = 512, tmax = 5.0))
             solve_pde!(prob_fd)
             @test prob_fd.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
             # Test pseudospectral method
-            prob_ps = RDEProblem(RDEParam{T}(N=1024, tmax=5.0), 
-                               method=PseudospectralMethod{T}())
+            prob_ps = RDEProblem(
+                RDEParam{T}(N = 1024, tmax = 5.0),
+                method = PseudospectralMethod{T}()
+            )
             solve_pde!(prob_ps)
-            @test prob_ps.sol.retcode == OrdinaryDiffEq.ReturnCode.Success  
+            @test prob_ps.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
         end
     end
 
     @testset "Solver Options" begin
-        params = RDEParam{Float32}(N=512, tmax=1.0)
+        params = RDEParam{Float32}(N = 512, tmax = 1.0)
         prob = RDEProblem(params)
-        
+
         # Test different solvers
-        solve_pde!(prob, solver=Tsit5())
+        solve_pde!(prob, solver = Tsit5())
         @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
-        solve_pde!(prob, solver=Rodas4(autodiff=false))
+        solve_pde!(prob, solver = Rodas4(autodiff = false))
         @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
         # Test saveframes option
-        solve_pde!(prob, saveframes=100)
+        solve_pde!(prob, saveframes = 100)
         @test length(prob.sol.t) == 101  # Including initial condition
     end
 end
-
-
-
-
-

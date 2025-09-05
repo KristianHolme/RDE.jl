@@ -19,9 +19,11 @@ The plot includes:
 - Chamber pressure over time
 - Interactive time controls (if `player_controls=true`)
 """
-function plot_solution(prob::RDEProblem;
-    time_idx=Observable(1),
-    player_controls=true)
+function plot_solution(
+        prob::RDEProblem;
+        time_idx = Observable(1),
+        player_controls = true
+    )
     params = prob.params
     sol = prob.sol
     x = prob.x
@@ -32,30 +34,30 @@ function plot_solution(prob::RDEProblem;
 
     # Create Observables for dynamic data
     u_data = @lift(sol.u[$time_idx][1:N])
-    λ_data = @lift(sol.u[$time_idx][N+1:end])
+    λ_data = @lift(sol.u[$time_idx][(N + 1):end])
 
-    fig = Figure(size=(1000, 600))
+    fig = Figure(size = (1000, 600))
     upper_area = fig[1, 1] = GridLayout()
     plotting_area = fig[2, 1] = GridLayout()
     metrics_area = fig[3, 1][1, 1] = GridLayout()
 
 
-    main_plotting(plotting_area, x, u_data, λ_data, params; u_max=u_max)
+    main_plotting(plotting_area, x, u_data, λ_data, params; u_max = u_max)
 
     # Add energy_balance_plot
     energy_bal = energy_balance(sol.u, params)
-    ax_eb = Axis(metrics_area[1, 1], title="Energy balance", xlabel="t", ylabel="Ė")
+    ax_eb = Axis(metrics_area[1, 1], title = "Energy balance", xlabel = "t", ylabel = "Ė")
     lines!(ax_eb, sol.t, energy_bal)
-    vlines!(ax_eb, @lift(sol.t[$time_idx]), color=:green, alpha=0.5)
+    vlines!(ax_eb, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
 
     # Add chamber pressure
     chamber_p = chamber_pressure(sol.u, params)
-    ax_cp = Axis(metrics_area[1, 2], title="Chamber pressure", xlabel="t", ylabel="̄u²")
+    ax_cp = Axis(metrics_area[1, 2], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
     lines!(ax_cp, sol.t, chamber_p)
-    vlines!(ax_cp, @lift(sol.t[$time_idx]), color=:green, alpha=0.5)
+    vlines!(ax_cp, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
 
     # Time label
-    label = Label(upper_area[1, 1], text=@lift("Time: $(round(t_values[$time_idx], digits=2))"), tellwidth=false)
+    label = Label(upper_area[1, 1], text = @lift("Time: $(round(t_values[$time_idx], digits = 2))"), tellwidth = false)
 
     if player_controls
         play_ctrl_area = fig[3, 1][1, 2] = GridLayout()
@@ -65,7 +67,7 @@ function plot_solution(prob::RDEProblem;
     Makie.trim!(fig.layout)
 
     display(fig)
-    fig
+    return fig
 end
 
 """
@@ -100,7 +102,7 @@ Features:
 """
 function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
     # Slider
-    sld = Slider(play_ctrl_area[1, 1], range=1:num_times, startvalue=1)
+    sld = Slider(play_ctrl_area[1, 1], range = 1:num_times, startvalue = 1)
     on(sld.value) do val
         time_idx[] = Int(round(val))
         # @info "SLIDER ACTIVATED"
@@ -110,14 +112,14 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     button_area = play_ctrl_area[2, 1] = GridLayout()
 
     # step to start button
-    start_button = Button(button_area[1, 1], label="<<", tellwidth=false)
+    start_button = Button(button_area[1, 1], label = "<<", tellwidth = false)
 
     on(start_button.clicks) do _
         time_idx[] = 1
         set_close_to!(sld, time_idx[])
     end
     # step back button
-    prev_button = Button(button_area[1, 2], label="<", tellwidth=false)
+    prev_button = Button(button_area[1, 2], label = "<", tellwidth = false)
 
     on(prev_button.clicks) do _
         if time_idx[] > 1
@@ -128,7 +130,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
 
 
     # step forward button button
-    next_button = Button(button_area[1, 3], label=">", tellwidth=false)
+    next_button = Button(button_area[1, 3], label = ">", tellwidth = false)
 
     on(next_button.clicks) do _
         if time_idx[] < num_times
@@ -137,7 +139,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
         set_close_to!(sld, time_idx[])
     end
     # step to end button
-    end_button = Button(button_area[1, 4], label=">>", tellwidth=false)
+    end_button = Button(button_area[1, 4], label = ">>", tellwidth = false)
 
     on(end_button.clicks) do _
         time_idx[] = num_times
@@ -145,7 +147,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     end
 
     # Play/Pause button
-    play = Button(button_area[1, 5], label="Play", tellwidth=false)
+    play = Button(button_area[1, 5], label = "Play", tellwidth = false)
     playing = Observable(false)
 
     on(play.clicks) do _
@@ -158,7 +160,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
     end
 
     #Loop button
-    loop = Button(button_area[1, 6], label="Loop", tellwidth=false)
+    loop = Button(button_area[1, 6], label = "Loop", tellwidth = false)
     looping = Observable(true)
 
     on(loop.clicks) do _
@@ -173,17 +175,17 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
 
     # Animation speed Slider
     anim_speed = Observable(1.0)
-    anim_sld = Slider(play_ctrl_area[2, 2], range=0.1:0.1:5.0, startvalue=1.0)
+    anim_sld = Slider(play_ctrl_area[2, 2], range = 0.1:0.1:5.0, startvalue = 1.0)
     on(anim_sld.value) do val
         anim_speed[] = val
     end
 
     #Animation speed label
-    anim_speed_label = Label(play_ctrl_area[1, 2], text=@lift("Speed: $(round($anim_speed, digits=2))"), tellwidth=false)
+    anim_speed_label = Label(play_ctrl_area[1, 2], text = @lift("Speed: $(round($anim_speed, digits = 2))"), tellwidth = false)
 
 
     # Animation loop
-    @async begin
+    return @async begin
         while true
             if playing[]
                 time_idx[] = min(time_idx[] + 1, num_times)
@@ -218,18 +220,20 @@ Plot auxiliary functions ω(u), ξ(u), and β(u) in a separate layout.
 - `s=Observable(params.s)`: Parameter s in β function
 - `u_p=Observable(params.u_p)`: Parameter u_p in β function
 """
-function plot_subfunctions(layout::GridLayout, x, u_data::Observable,
-    params;
-    u_max=Observable(10.0),
-    s=Observable(params.s),
-    u_p=Observable(params.u_p))
+function plot_subfunctions(
+        layout::GridLayout, x, u_data::Observable,
+        params;
+        u_max = Observable(10.0),
+        s = Observable(params.s),
+        u_p = Observable(params.u_p)
+    )
 
     hist_β_max = Observable(maximum(β.(u_data[], s[], u_p[], params.k_param)))
     hist_ω_max = Observable(maximum(ω.(u_data[], params.u_c, params.α)))
 
     #Axes for ω, ξ, and β
     ω_max = @lift(maximum(ω.($u_data, params.u_c, params.α)))
-    ξ_max = @lift(max(1e-3, ξ($u_max, params.u_0, params.n)) .* 1.05)
+    ξ_max = @lift(max(1.0e-3, ξ($u_max, params.u_0, params.n)) .* 1.05)
     β_max = @lift(maximum(β.($u_data, $s, $u_p, params.k_param)))
 
     on(β_max) do val
@@ -240,14 +244,20 @@ function plot_subfunctions(layout::GridLayout, x, u_data::Observable,
         hist_ω_max[] = max(hist_ω_max[], val)
     end
 
-    ax_ω = Axis(layout[1, 1], xticksvisible=false, xlabelvisible=false,
-        xticklabelsvisible=false, ylabel="ω(u)",
-        limits=@lift((nothing, (0, max($hist_ω_max * 1.05, 1e-3)))))
-    ax_ξ = Axis(layout[2, 1], xticksvisible=false, xlabelvisible=false,
-        xticklabelsvisible=false, ylabel="ξ(u)",
-        limits=@lift((nothing, (nothing, $ξ_max .* 1.05))))
-    ax_β = Axis(layout[3, 1], xlabel="x", ylabel="β(u)",
-        limits=@lift((nothing, (0.0, max($hist_β_max * 1.05, 1e-3)))))
+    ax_ω = Axis(
+        layout[1, 1], xticksvisible = false, xlabelvisible = false,
+        xticklabelsvisible = false, ylabel = "ω(u)",
+        limits = @lift((nothing, (0, max($hist_ω_max * 1.05, 1.0e-3))))
+    )
+    ax_ξ = Axis(
+        layout[2, 1], xticksvisible = false, xlabelvisible = false,
+        xticklabelsvisible = false, ylabel = "ξ(u)",
+        limits = @lift((nothing, (nothing, $ξ_max .* 1.05)))
+    )
+    ax_β = Axis(
+        layout[3, 1], xlabel = "x", ylabel = "β(u)",
+        limits = @lift((nothing, (0.0, max($hist_β_max * 1.05, 1.0e-3))))
+    )
 
     ω_data = @lift(ω.($u_data, params.u_c, params.α))
     ξ_data = @lift(ξ.($u_data, params.u_0, params.n))
@@ -279,14 +289,16 @@ Create main plots for velocity and reaction progress fields.
 - `show_mouse_vlines::Bool=true`: Whether to show vertical lines at mouse position
 - `include_subfunctions::Bool=false`: Whether to include auxiliary function plots
 """
-function main_plotting(layout::GridLayout, x, u_data::Observable,
-    λ_data::Observable,
-    params;
-    u_max=Observable(10.0),
-    s=Observable(params.s),
-    u_p=Observable(params.u_p),
-    show_mouse_vlines=true,
-    include_subfunctions=false)
+function main_plotting(
+        layout::GridLayout, x, u_data::Observable,
+        λ_data::Observable,
+        params;
+        u_max = Observable(10.0),
+        s = Observable(params.s),
+        u_p = Observable(params.u_p),
+        show_mouse_vlines = true,
+        include_subfunctions = false
+    )
 
     if include_subfunctions
         plotting_area_subfuncs = layout[1, 1] = GridLayout()
@@ -300,10 +312,10 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
 
 
     #Plotting u and λ
-    ax_u = Axis(plotting_area_main[1, 1], xlabel="x", ylabel="u(x, t)", title="u(x, t)", limits=@lift((nothing, (0.0, max($u_max * 1.05, 1e-3)))))
-    ax_λ = Axis(plotting_area_main[2, 1], xlabel="x", ylabel="λ(x, t)", title="λ(x, t)", limits=(nothing, (-0.05, 1.05)))
-    ax_u_circ = Axis3(plotting_area_main[1, 2], limits=@lift((nothing, nothing, (0, max($u_max * 1.05, 1e-3)))), protrusions=0)
-    ax_λ_circ = Axis3(plotting_area_main[2, 2], limits=(nothing, nothing, (-0.05, 1.05)), protrusions=0)
+    ax_u = Axis(plotting_area_main[1, 1], xlabel = "x", ylabel = "u(x, t)", title = "u(x, t)", limits = @lift((nothing, (0.0, max($u_max * 1.05, 1.0e-3)))))
+    ax_λ = Axis(plotting_area_main[2, 1], xlabel = "x", ylabel = "λ(x, t)", title = "λ(x, t)", limits = (nothing, (-0.05, 1.05)))
+    ax_u_circ = Axis3(plotting_area_main[1, 2], limits = @lift((nothing, nothing, (0, max($u_max * 1.05, 1.0e-3)))), protrusions = 0)
+    ax_λ_circ = Axis3(plotting_area_main[2, 2], limits = (nothing, nothing, (-0.05, 1.05)), protrusions = 0)
 
     circle_indices = [1:params.N; 1]
 
@@ -311,26 +323,26 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
     λ_data_circle = @lift($λ_data[circle_indices])
 
 
-    lines!(ax_u, x, u_data, color=:blue)
-    lines!(ax_λ, x, λ_data, color=:red)
+    lines!(ax_u, x, u_data, color = :blue)
+    lines!(ax_λ, x, λ_data, color = :red)
 
     #plot circles
     L = params.L
     r = L / (2π)
     xs_circle = r .* cos.(x[circle_indices] .* 2π / L)
     ys_circle = r .* sin.(x[circle_indices] .* 2π / L)
-    lines!(ax_u_circ, xs_circle, ys_circle, u_data_circle, color=:blue)
-    lines!(ax_λ_circ, xs_circle, ys_circle, λ_data_circle, color=:red)
-    hidedecorations!(ax_u_circ, grid=false)
-    hidedecorations!(ax_λ_circ, grid=false)
+    lines!(ax_u_circ, xs_circle, ys_circle, u_data_circle, color = :blue)
+    lines!(ax_λ_circ, xs_circle, ys_circle, λ_data_circle, color = :red)
+    hidedecorations!(ax_u_circ, grid = false)
+    hidedecorations!(ax_λ_circ, grid = false)
 
     # Hovering location Observable
-    if show_mouse_vlines
+    return if show_mouse_vlines
         x_cursor = Observable(0.0)
         # Add vertical lines to each axis, linked to the x_cursor observable
         linear_axes = [subfuncs_axes; ax_u; ax_λ]
         for ax in linear_axes
-            vlines!(ax, x_cursor, color=:black, linestyle=:dash)
+            vlines!(ax, x_cursor, color = :black, linestyle = :dash)
         end
         # @show layout
         # Function to update the x_cursor when the mouse is over any axis

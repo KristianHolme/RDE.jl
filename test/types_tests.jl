@@ -3,7 +3,7 @@ using RDE
 
 @testset "Types and Initialization" begin
     @testset "RDEParam" begin
-        params = RDEParam{Float32}(N=16)
+        params = RDEParam{Float32}(N = 16)
         @test params.N == 16
         @test typeof(params.L) == Float32
         @test typeof(params.ν_1) == Float32
@@ -16,7 +16,7 @@ using RDE
         @test ps_method.cache === nothing
         @test sprint(show, ps_method) == "PseudospectralMethod{Float32} (without dealiasing, cache uninitialized)"
 
-        ps_method_no_dealias = PseudospectralMethod{Float32}(dealias=true)
+        ps_method_no_dealias = PseudospectralMethod{Float32}(dealias = true)
         @test ps_method_no_dealias.dealias == true
         @test ps_method_no_dealias.cache === nothing
         @test sprint(show, ps_method_no_dealias) == "PseudospectralMethod{Float32} (with dealiasing, cache uninitialized)"
@@ -32,8 +32,8 @@ using RDE
     end
 
     @testset "Cache Initialization" begin
-        params = RDEParam{Float32}(N=16)
-        dx = Float32(2π/16)
+        params = RDEParam{Float32}(N = 16)
+        dx = Float32(2π / 16)
 
         # Test PseudospectralMethod cache
         ps_method = PseudospectralMethod{Float32}()
@@ -53,8 +53,8 @@ using RDE
     end
 
     @testset "Problem Construction" begin
-        params = RDEParam{Float32}(N=16)
-        
+        params = RDEParam{Float32}(N = 16)
+
         # Test with default method
         prob = RDEProblem(params)
         @test prob.method isa FiniteDifferenceMethod{Float32}
@@ -63,7 +63,7 @@ using RDE
         @test prob.control_shift_strategy isa ZeroControlShift
 
         # Test with pseudospectral method
-        prob_ps = RDEProblem(params, method=PseudospectralMethod{Float32}())
+        prob_ps = RDEProblem(params, method = PseudospectralMethod{Float32}())
         @test prob_ps.method isa PseudospectralMethod{Float32}
         @test prob_ps.method.cache isa RDE.PseudospectralRDECache{Float32}
     end
