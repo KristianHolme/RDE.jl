@@ -288,6 +288,7 @@ Create main plots for velocity and reaction progress fields.
 - `u_p=Observable(params.u_p)`: Parameter u_p in β function
 - `show_mouse_vlines::Bool=true`: Whether to show vertical lines at mouse position
 - `include_subfunctions::Bool=false`: Whether to include auxiliary function plots
+- `hard_u_limit::Bool=false`: Whether to use hard velocity limit (2.5) instead of dynamic scaling
 """
 function main_plotting(layout::GridLayout, x, u_data::Observable,
     λ_data::Observable,
