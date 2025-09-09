@@ -289,16 +289,15 @@ Create main plots for velocity and reaction progress fields.
 - `show_mouse_vlines::Bool=true`: Whether to show vertical lines at mouse position
 - `include_subfunctions::Bool=false`: Whether to include auxiliary function plots
 """
-function main_plotting(
-        layout::GridLayout, x, u_data::Observable,
-        λ_data::Observable,
-        params;
-        u_max = Observable(10.0),
-        s = Observable(params.s),
-        u_p = Observable(params.u_p),
-        show_mouse_vlines = true,
-        include_subfunctions = false
-    )
+function main_plotting(layout::GridLayout, x, u_data::Observable,
+    λ_data::Observable,
+    params;
+    u_max=Observable(10.0),
+    s=Observable(params.s),
+    u_p=Observable(params.u_p),
+    show_mouse_vlines=true,
+    include_subfunctions=false,
+    hard_u_limit=false)
 
     if include_subfunctions
         plotting_area_subfuncs = layout[1, 1] = GridLayout()
@@ -312,10 +311,18 @@ function main_plotting(
 
 
     #Plotting u and λ
-    ax_u = Axis(plotting_area_main[1, 1], xlabel = "x", ylabel = "u(x, t)", title = "u(x, t)", limits = @lift((nothing, (0.0, max($u_max * 1.05, 1.0e-3)))))
-    ax_λ = Axis(plotting_area_main[2, 1], xlabel = "x", ylabel = "λ(x, t)", title = "λ(x, t)", limits = (nothing, (-0.05, 1.05)))
-    ax_u_circ = Axis3(plotting_area_main[1, 2], limits = @lift((nothing, nothing, (0, max($u_max * 1.05, 1.0e-3)))), protrusions = 0)
-    ax_λ_circ = Axis3(plotting_area_main[2, 2], limits = (nothing, nothing, (-0.05, 1.05)), protrusions = 0)
+    if hard_u_limit
+        u_limit = 2.5
+        twoDlimits = (nothing, (0.0, u_limit))
+        threeDlimits = (nothing, nothing, (0, u_limit))
+    else
+        twoDlimits = @lift((nothing, (0.0, max($u_max * 1.05, 1e-3))))
+        threeDlimits = @lift((nothing, nothing, (0, max($u_max * 1.05, 1e-3))))
+    end
+    ax_u = Axis(plotting_area_main[1, 1], xlabel="x", ylabel="u(x, t)", title="u(x, t)", limits=twoDlimits)
+    ax_λ = Axis(plotting_area_main[2, 1], xlabel="x", ylabel="λ(x, t)", title="λ(x, t)", limits=(nothing, (-0.05, 1.05)))
+    ax_u_circ = Axis3(plotting_area_main[1, 2], limits=threeDlimits, protrusions=0)
+    ax_λ_circ = Axis3(plotting_area_main[2, 2], limits=(nothing, nothing, (-0.05, 1.05)), protrusions=0)
 
     circle_indices = [1:params.N; 1]
 
