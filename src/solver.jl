@@ -45,6 +45,26 @@ Compute the refueling function β(u).
 β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
 
 """
+    write_advection!(du, u, cache)
+
+Write the advective contribution into `du` using dispatch over cache type.
+For conservative FV cache, uses `cache.adv`. Otherwise uses `-u .* u_x`.
+"""
+function write_advection!(du::AbstractVector{T}, u::AbstractVector{T}, cache::FVCache{T}) where {T}
+    @turbo for i in eachindex(du)
+        du[i] = cache.adv[i]
+    end
+    return nothing
+end
+
+function write_advection!(du::AbstractVector{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}) where {T}
+    @turbo for i in eachindex(du)
+        du[i] = -u[i] * cache.u_x[i]
+    end
+    return nothing
+end
+
+"""
     RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
 Compute the right-hand side of the RDE system for the ODE solver.
@@ -94,7 +114,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     # Calculate derivatives using the method's cache
     calc_derivatives!(u, λ, prob.method)
 
-    u_x = cache.u_x
+    # For method-dependent fields below, not all caches have u_x; we branch later
     u_xx = cache.u_xx
     λ_xx = cache.λ_xx
     ωu = cache.ωu                  # Real array of size N
@@ -129,7 +149,8 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
 
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
-    @turbo @. du = -u * u_x + (1.0f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+    write_advection!(du, u, cache)
+    @turbo @. du = du + (1.0f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
     @turbo @. dλ = (1.0f0 - λ) * ωu - βu * λ + ν_2 * λ_xx
 
@@ -175,5 +196,65 @@ function solve_pde!(prob::RDEProblem; solver = Tsit5(), saveframes = 75, kwargs.
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
+    return prob.sol = sol
+end
+
+"""
+    solve_pde!(prob::RDEProblem{T, FiniteVolumeMethod, R, C}; solver=SSPRK33(), saveat=nothing, dtmax=nothing, safety=0.9, kwargs...)
+
+Multiple-dispatch overload for FiniteVolumeMethod: uses adaptive stepping with an
+SSP RK by default, with a dynamic dtmax enforced via a DiscreteCallback based on
+`cfl_dtmax`. If `saveat` is a vector, the solver will hit those exact times.
+"""
+function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = nothing, dtmax = nothing, safety = 0.9, kwargs...) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
+    uλ_0 = vcat(prob.u0, prob.λ0)
+    tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
+    default_saveat = isnothing(saveat) ? (prob.params.tmax / 75) : saveat
+
+    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+
+    # Dynamic dtmax via callback to respect CFL while allowing adaptive substeps to hit saveat
+    function cfl_affect!(integrator)
+        u = view(integrator.u, 1:prob.params.N)
+        integrator.opts.dtmax = isnothing(dtmax) ? cfl_dtmax(prob.params, u; safety = safety) : dtmax
+    end
+    cfl_condition(u, t, integrator) = true
+    cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+
+    # Enforce initial dtmax from initial condition as well
+    dtmax0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0; safety = safety) : dtmax
+
+    sol = OrdinaryDiffEq.solve(prob_ode, solver; adaptive = true, dtmax = dtmax0, saveat = default_saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
+    if sol.retcode != :Success
+        @warn "failed to solve PDE"
+    end
+    return prob.sol = sol
+end
+
+"""
+    solve_pde!(prob::RDEProblem{T, UpwindMethod, R, C}; solver=SSPRK33(), saveat=nothing, dtmax=nothing, safety=0.9, kwargs...)
+
+Multiple-dispatch overload for UpwindMethod, same behavior as FiniteVolumeMethod.
+"""
+function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = nothing, dtmax = nothing, safety = 0.9, kwargs...) where {T <: AbstractFloat, M <: UpwindMethod, R <: AbstractReset, C <: AbstractControlShift}
+    uλ_0 = vcat(prob.u0, prob.λ0)
+    tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
+    default_saveat = isnothing(saveat) ? (prob.params.tmax / 75) : saveat
+
+    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+
+    function cfl_affect!(integrator)
+        u = view(integrator.u, 1:prob.params.N)
+        integrator.opts.dtmax = isnothing(dtmax) ? cfl_dtmax(prob.params, u; safety = safety) : dtmax
+    end
+    cfl_condition(u, t, integrator) = true
+    cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+
+    dtmax0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0; safety = safety) : dtmax
+
+    sol = OrdinaryDiffEq.solve(prob_ode, solver; adaptive = true, dtmax = dtmax0, saveat = default_saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
+    if sol.retcode != :Success
+        @warn "failed to solve PDE"
+    end
     return prob.sol = sol
 end

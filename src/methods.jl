@@ -42,7 +42,7 @@ function create_spectral_derivative_arrays(params::RDEParam{T}) where {T <: Abst
 end
 
 """
-    calc_derivatives!(u::T, λ::T, method::PseudospectralMethod) where T <:AbstractArray
+    calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::PseudospectralMethod{T}) where {T <: AbstractFloat}
 
 Calculate spatial derivatives using pseudospectral method with FFT.
 
@@ -58,7 +58,7 @@ Calculate spatial derivatives using pseudospectral method with FFT.
 - Computes second derivative for λ
 - Handles periodic boundary conditions automatically
 """
-function calc_derivatives!(u::T, λ::T, method::PseudospectralMethod) where {T <: AbstractArray}
+function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::PseudospectralMethod{T}) where {T <: AbstractFloat}
     cache = method.cache
     ik = cache.ik             # Complex array of size N÷2+1
     k2 = cache.k2             # Real array of size N÷2+1
@@ -90,7 +90,7 @@ function calc_derivatives!(u::T, λ::T, method::PseudospectralMethod) where {T <
 end
 
 """
-    calc_derivatives!(u::T, λ::T, method::FiniteDifferenceMethod) where T <: AbstractArray
+    calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::FiniteDifferenceMethod{T}) where {T <: AbstractFloat}
 
 Calculate spatial derivatives using finite difference method.
 
@@ -106,12 +106,12 @@ Calculate spatial derivatives using finite difference method.
 - Computes second derivative for λ
 - Optimized with @turbo macro for performance
 """
-function calc_derivatives!(u::T, λ::T, method::FiniteDifferenceMethod) where {T <: AbstractArray}
+function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::FiniteDifferenceMethod{T}) where {T <: AbstractFloat}
     cache = method.cache
     dx = cache.dx
     N = cache.N
-    inv_2dx = 1 / (2 * dx)
-    inv_dx2 = 1 / dx^2
+    inv_2dx = T(0.5) / dx
+    inv_dx2 = one(T) / (dx^2)
 
     # Preallocated arrays
     u_x = cache.u_x
@@ -181,7 +181,149 @@ function init_cache!(method::UpwindMethod{T}, params::RDEParam{T}, dx::T) where 
 end
 
 """
-    calc_derivatives!(u::T, λ::T, method::UpwindMethod) where T <: AbstractArray
+    init_cache!(method::FiniteVolumeMethod{T}, params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+
+Initialize the cache for the finite-volume method with the problem parameters.
+"""
+function init_cache!(method::FiniteVolumeMethod{T, L}, params::RDEParam{T}, dx::T) where {T <: AbstractFloat, L <: AbstractLimiter}
+    return method.cache = FVCache{T}(params, dx)
+end
+
+"""
+    calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::FiniteVolumeMethod{T, L}) where {T <: AbstractFloat, L <: AbstractLimiter}
+
+Compute conservative advective residual using MUSCL reconstruction with a slope
+limiter and Rusanov flux, plus second-order central diffusion terms for `u` and `λ`.
+Stores:
+- `cache.adv[i] = -(F̂_{i+1/2} - F̂_{i-1/2})/dx`
+- `cache.u_xx`, `cache.λ_xx`
+"""
+@inline function _limited_slope!(σ::AbstractVector{T}, u::AbstractVector{T}, limiter::MinmodLimiter) where {T <: AbstractFloat}
+    N = length(u)
+    @inbounds begin
+        # boundary i=1
+        Δp = u[2] - u[1]
+        Δm = u[1] - u[N]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σ[1] = s * min(abs(Δm), abs(Δp))
+    end
+    @inbounds for i in 2:(N - 1)
+        Δp = u[i + 1] - u[i]
+        Δm = u[i] - u[i - 1]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σ[i] = s * min(abs(Δm), abs(Δp))
+    end
+    @inbounds begin
+        # boundary i=N
+        Δp = u[1] - u[N]
+        Δm = u[N] - u[N - 1]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σ[N] = s * min(abs(Δm), abs(Δp))
+    end
+    return nothing
+end
+
+@inline function _limited_slope!(σ::AbstractVector{T}, u::AbstractVector{T}, ::MCLimiter) where {T <: AbstractFloat}
+    N = length(u)
+    @inbounds begin
+        # boundary i=1
+        Δp = u[2] - u[1]
+        Δm = u[1] - u[N]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σc = T(0.5) * (Δm + Δp)
+        σ2m = T(2.0) * Δm
+        σ2p = T(2.0) * Δp
+        σ[1] = s * min(abs(σc), abs(σ2m), abs(σ2p))
+    end
+    @inbounds for i in 2:(N - 1)
+        Δp = u[i + 1] - u[i]
+        Δm = u[i] - u[i - 1]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σc = T(0.5) * (Δm + Δp)
+        σ2m = T(2.0) * Δm
+        σ2p = T(2.0) * Δp
+        σ[i] = s * min(abs(σc), abs(σ2m), abs(σ2p))
+    end
+    @inbounds begin
+        # boundary i=N
+        Δp = u[1] - u[N]
+        Δm = u[N] - u[N - 1]
+        s = (sign(Δp) + sign(Δm)) * T(0.5)
+        σc = T(0.5) * (Δm + Δp)
+        σ2m = T(2.0) * Δm
+        σ2p = T(2.0) * Δp
+        σ[N] = s * min(abs(σc), abs(σ2m), abs(σ2p))
+    end
+    return nothing
+end
+
+function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::FiniteVolumeMethod{T, L}) where {T <: AbstractFloat, L <: AbstractLimiter}
+    cache = method.cache
+    dx = cache.dx
+    N = cache.N
+
+    σ = cache.σ
+    UL = cache.UL
+    UR = cache.UR
+    F̂ = cache.F̂
+    adv = cache.adv
+
+    # ----------------------------
+    # Diffusion (second derivatives)
+    # ----------------------------
+    inv_dx2 = one(T) / (dx^2)
+    u_xx = cache.u_xx
+    λ_xx = cache.λ_xx
+    u_xx[1] = (u[2] - 2 * u[1] + u[N]) * inv_dx2
+    @turbo for i in 2:(N - 1)
+        u_xx[i] = (u[i + 1] - 2 * u[i] + u[i - 1]) * inv_dx2
+    end
+    u_xx[N] = (u[1] - 2 * u[N] + u[N - 1]) * inv_dx2
+
+    λ_xx[1] = (λ[2] - 2 * λ[1] + λ[N]) * inv_dx2
+    @inbounds for i in 2:(N - 1)
+        λ_xx[i] = (λ[i + 1] - 2 * λ[i] + λ[i - 1]) * inv_dx2
+    end
+    λ_xx[N] = (λ[1] - 2 * λ[N] + λ[N - 1]) * inv_dx2
+
+    # ----------------------------
+    # MUSCL reconstruction (limited slopes)
+    # ----------------------------
+    _limited_slope!(σ, u, method.limiter)
+
+    # reconstruct interface states at i+1/2 stored at index i (1..N)
+    @inbounds for i in 1:(N - 1)
+        UL[i] = u[i] + T(0.5) * σ[i]
+        UR[i] = u[i + 1] - T(0.5) * σ[i + 1]
+    end
+    @inbounds begin
+        # periodic wrap for the last interface N+1/2 -> index N
+        UL[N] = u[N] + T(0.5) * σ[N]
+        UR[N] = u[1] - T(0.5) * σ[1]
+    end
+
+    # ----------------------------
+    # Rusanov (Lax–Friedrichs) numerical flux for f(u) = 0.5*u^2
+    # ----------------------------
+    @inbounds for i in 1:N
+        a = max(abs(UL[i]), abs(UR[i]))
+        Fl = T(0.5) * UL[i] * UL[i]
+        Fr = T(0.5) * UR[i] * UR[i]
+        F̂[i] = T(0.5) * (Fl + Fr) - T(0.5) * a * (UR[i] - UL[i])
+    end
+
+    inv_dx = one(T) / dx
+    # conservative divergence: -(F_{i+1/2} - F_{i-1/2})/dx
+    adv[1] = -(F̂[1] - F̂[N]) * inv_dx
+    @inbounds for i in 2:N
+        adv[i] = -(F̂[i] - F̂[i - 1]) * inv_dx
+    end
+
+    return nothing
+end
+
+"""
+    calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::UpwindMethod{T}) where {T <: AbstractFloat}
 
 Calculate spatial derivatives using upwinding scheme appropriate for the RDE system.
 
@@ -200,12 +342,12 @@ Calculate spatial derivatives using upwinding scheme appropriate for the RDE sys
 - Computes second derivative for λ
 - Optimized with @turbo macro for performance
 """
-function calc_derivatives!(u::T, λ::T, method::UpwindMethod) where {T <: AbstractArray}
+function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::UpwindMethod{T}) where {T <: AbstractFloat}
     cache = method.cache
     dx = cache.dx
     N = cache.N
-    inv_dx = 1 / dx
-    inv_dx2 = 1 / dx^2
+    inv_dx = one(T) / dx
+    inv_dx2 = one(T) / (dx^2)
     order = method.order
 
     # Preallocated arrays
@@ -217,23 +359,17 @@ function calc_derivatives!(u::T, λ::T, method::UpwindMethod) where {T <: Abstra
     # with periodic boundary conditions
     if order == 1
         # First-order upwind (backward differences)
-        @turbo for i in 1:N
-            # Backward index with periodic wrapping
-            im1 = i > 1 ? i - 1 : N
-
-            # Backward difference for all points (upwind for wave propagation from left to right)
-            u_x[i] = (u[i] - u[im1]) * inv_dx
+        @inbounds u_x[1] = (u[1] - u[N]) * inv_dx
+        @turbo for i in 2:N
+            u_x[i] = (u[i] - u[i - 1]) * inv_dx
         end
     else
         # Second-order upwind (3-point stencil)
-        @turbo for i in 1:N
-            # Backward indices with periodic wrapping
-            im1 = i > 1 ? i - 1 : N
-            im2 = i > 2 ? i - 2 : (i > 1 ? N : N - 1)
-
-            # Second-order upwind for left-to-right propagation
-            # f'(x) ≈ (3f(x) - 4f(x-h) + f(x-2h))/(2h)
-            u_x[i] = (3 * u[i] - 4 * u[im1] + u[im2]) * (0.5 * inv_dx)
+        # boundaries
+        @inbounds u_x[1] = (3 * u[1] - 4 * u[N] + u[N - 1]) * (T(0.5) * inv_dx)
+        @inbounds u_x[2] = (3 * u[2] - 4 * u[1] + u[N]) * (T(0.5) * inv_dx)
+        @turbo for i in 3:N
+            u_x[i] = (3 * u[i] - 4 * u[i - 1] + u[i - 2]) * (T(0.5) * inv_dx)
         end
     end
 

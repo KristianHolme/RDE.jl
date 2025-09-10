@@ -164,3 +164,39 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::CycleShockR
     reset_state_and_pressure!(prob, NShock(reset_strategy.shocks[mod1(reset_strategy.n, length(reset_strategy.shocks))]))
     return reset_strategy.n += 1
 end
+
+struct RandomReset <: AbstractReset end
+
+function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomReset)
+    x = prob.x
+    T = eltype(x)
+    L = prob.params.L
+
+    # Generate random periodic trigonometric series with decaying amplitudes
+    # y(x) = baseline + Σ_{k=1..K} (a_k / k^p) * cos(2π k x / L + φ_k)
+    function random_trig_series(x::AbstractVector{T}, L::T;
+            K::Int = 12, amplitude::T = T(1), decay::T = T(1.5), baseline::T = T(0)) where {T <: AbstractFloat}
+        y = fill(baseline, length(x))
+        twoπ = T(2) * T(π)
+        @inbounds for k in 1:K
+            amp_k = amplitude / (T(k)^decay)
+            ϕ = twoπ * rand(T)
+            y .+= amp_k .* cos.(twoπ * T(k) .* x ./ L .+ ϕ)
+        end
+        return y
+    end
+
+    # Velocity: nonnegative, around O(1)
+    u_rand = random_trig_series(x, L; K = 12, amplitude = T(0.8), decay = T(1.4), baseline = T(1))
+    @. u_rand = max(u_rand, T(0))
+
+    # Reaction progress: clamp to [0, 1], centered around 0.5
+    λ_rand = random_trig_series(x, L; K = 12, amplitude = T(0.3), decay = T(1.6), baseline = T(0.5))
+    @. λ_rand = clamp(λ_rand, T(0), T(1))
+
+    prob.u0 .= u_rand
+    prob.λ0 .= λ_rand
+    prob.params.u_p = T(0.5)
+    return nothing
+end
+    

@@ -367,6 +367,126 @@ Construct an upwind finite difference method with default float type.
 """
 UpwindMethod(; order::Int = 1) = UpwindMethod{Float32}(order, nothing)
 
+"""
+    FVCache{T<:AbstractFloat} <: AbstractRDECache{T}
+
+Cache for finite-volume method (conservative) with MUSCL reconstruction and
+Rusanov (Lax–Friedrichs) flux.
+
+# Fields
+## Spatial Arrays
+- `u_xx`: Velocity second derivative (for diffusion)
+- `λ_xx`: Reaction progress second derivative (for diffusion)
+- `ωu, ξu, βu`: Nonlinear/source terms
+- `σ`: Limited slope per cell
+- `UL, UR`: Left/right reconstructed interface states (size N, for i+1/2)
+- `F̂`: Numerical flux at interfaces (size N, for i+1/2)
+- `adv`: Conservative advective residual per cell, −(F̂_{i+1/2}−F̂_{i−1/2})/dx
+
+## Grid Parameters
+- `dx`: Grid spacing
+- `N`: Number of grid points
+
+## Control Parameters
+- `u_p_current, u_p_previous`: Current and previous pressure values
+- `s_current, s_previous`: Current and previous s parameter values
+- `τ_smooth`: Smoothing time scale
+- `control_time`: Time of last control update
+"""
+mutable struct FVCache{T <: AbstractFloat} <: AbstractRDECache{T}
+    u_xx::Vector{T}
+    λ_xx::Vector{T}
+    ωu::Vector{T}
+    ξu::Vector{T}
+    βu::Vector{T}
+    σ::Vector{T}
+    UL::Vector{T}
+    UR::Vector{T}
+    F̂::Vector{T}
+    adv::Vector{T}
+    dx::T
+    N::Int64
+    u_p_current::Vector{T}
+    u_p_previous::Vector{T}
+    τ_smooth::T
+    s_previous::Vector{T}
+    s_current::Vector{T}
+    control_time::T
+    u_p_t::Vector{T}
+    s_t::Vector{T}
+    u_p_t_shifted::Vector{T}
+    s_t_shifted::Vector{T}
+end
+
+"""
+    FVCache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+
+Construct a cache for finite-volume method computations.
+"""
+function FVCache{T}(params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
+    N = params.N
+    return FVCache{T}(
+        Vector{T}(undef, N),  # u_xx
+        Vector{T}(undef, N),  # λ_xx
+        Vector{T}(undef, N),  # ωu
+        Vector{T}(undef, N),  # ξu
+        Vector{T}(undef, N),  # βu
+        Vector{T}(undef, N),  # σ
+        Vector{T}(undef, N),  # UL (i+1/2)
+        Vector{T}(undef, N),  # UR (i+1/2)
+        Vector{T}(undef, N),  # F̂ (i+1/2)
+        Vector{T}(undef, N),  # adv residual
+        dx,
+        N,
+        fill(params.u_p, N),  # u_p_current
+        fill(params.u_p, N),  # u_p_previous
+        T(1),                 # τ_smooth
+        fill(params.s, N),    # s_previous
+        fill(params.s, N),    # s_current
+        T(0),                 # control_time
+        fill(params.u_p, N),  # u_p_t
+        fill(params.s, N),    # s_t
+        fill(params.u_p, N),  # u_p_t_shifted
+        fill(params.s, N),    # s_t_shifted
+    )
+end
+
+#TODO fix placemant of docstring
+"""
+    FiniteVolumeMethod{T<:AbstractFloat} <: AbstractMethod
+
+Conservative finite-volume method with MUSCL reconstruction and Rusanov flux.
+
+# Fields
+- `limiter::Symbol`: Slope limiter (:minmod, :mc)
+- `cache::Union{Nothing, FVCache{T}}`: Computation cache (initialized later)
+"""
+abstract type AbstractLimiter end
+
+struct MinmodLimiter <: AbstractLimiter end
+struct MCLimiter <: AbstractLimiter end
+
+mutable struct FiniteVolumeMethod{T <: AbstractFloat, L <: AbstractLimiter} <: AbstractMethod
+    limiter::L
+    cache::Union{Nothing, FVCache{T}}
+end
+
+function Base.show(io::IO, method::FiniteVolumeMethod{T, L}) where {T, L}
+    cache_status = isnothing(method.cache) ? "uninitialized" : "initialized"
+    return print(io, "FiniteVolumeMethod{$T,$(L)} (cache $cache_status)")
+end
+
+"""
+    FiniteVolumeMethod{T}(; limiter::AbstractLimiter=MCLimiter()) where {T<:AbstractFloat}
+"""
+FiniteVolumeMethod{T}(; limiter::AbstractLimiter = MCLimiter()) where {T <: AbstractFloat} =
+    FiniteVolumeMethod{T, typeof(limiter)}(limiter, nothing)
+
+"""
+    FiniteVolumeMethod(; limiter::AbstractLimiter=MCLimiter())
+"""
+FiniteVolumeMethod(; limiter::AbstractLimiter = MCLimiter()) = FiniteVolumeMethod{Float32, typeof(limiter)}(limiter, nothing)
+
 ## Reset types
 abstract type AbstractReset end
 

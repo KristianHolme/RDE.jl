@@ -29,10 +29,12 @@ export get_n_shocks_init_func, random_shock_init_func,
     random_shock_or_combination_init_func
 export energy_balance, chamber_pressure
 export RDE_RHS!
-export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod, UpwindMethod, reset_cache!
+export AbstractMethod, PseudospectralMethod, FiniteDifferenceMethod, UpwindMethod, FiniteVolumeMethod, reset_cache!
+export AbstractLimiter, MinmodLimiter, MCLimiter
 export AbstractReset, Default, NShock, RandomCombination,
     RandomShockOrCombination, RandomShock, ShiftReset,
-    SineCombination, WeightedCombination, CustomPressureReset, CycleShockReset
+    SineCombination, WeightedCombination, CustomPressureReset, CycleShockReset,
+    RandomReset
 export AbstractControlShift, ZeroControlShift, LinearControlShift
 
 # Core simulator includes
