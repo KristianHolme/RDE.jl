@@ -313,7 +313,7 @@ function main_plotting(layout::GridLayout, x, u_data::Observable,
 
     #Plotting u and λ
     if hard_u_limit
-        u_limit = 2.5
+        u_limit = 2.9
         twoDlimits = (nothing, (0.0, u_limit))
         threeDlimits = (nothing, nothing, (0, u_limit))
     else
