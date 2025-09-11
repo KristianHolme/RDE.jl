@@ -458,7 +458,7 @@ end
 Conservative finite-volume method with MUSCL reconstruction and Rusanov flux.
 
 # Fields
-- `limiter::Symbol`: Slope limiter (:minmod, :mc)
+- `limiter::L` where `L <: AbstractLimiter`: Slope limiter (e.g., `MinmodLimiter()`, `MCLimiter()`)
 - `cache::Union{Nothing, FVCache{T}}`: Computation cache (initialized later)
 """
 abstract type AbstractLimiter end

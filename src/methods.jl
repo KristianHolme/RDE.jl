@@ -181,7 +181,7 @@ function init_cache!(method::UpwindMethod{T}, params::RDEParam{T}, dx::T) where 
 end
 
 """
-    init_cache!(method::FiniteVolumeMethod{T}, params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+    init_cache!(method::FiniteVolumeMethod{T, L}, params::RDEParam{T}, dx::T) where {T<:AbstractFloat, L<:AbstractLimiter}
 
 Initialize the cache for the finite-volume method with the problem parameters.
 """
