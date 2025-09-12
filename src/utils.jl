@@ -478,3 +478,26 @@ function outofdomain(uλ::Vector{T}, prob, t) where {T <: Real}
 
     return false
 end
+
+"""
+    get_dx(prob::RDEProblem{T}) where T -> T
+
+Get the spatial grid spacing (dx) for a RDE problem.
+
+The grid spacing is calculated as the difference between the first two grid points.
+
+# Arguments
+- `prob::RDEProblem{T}`: The RDE problem containing the spatial grid
+
+# Returns
+- `T`: The grid spacing dx
+
+# Example
+```julia
+dx = get_dx(prob)
+```
+"""
+function get_dx(prob::RDEProblem{T}) where {T}
+    dx::T = prob.x[2] - prob.x[1]
+    return dx
+end
