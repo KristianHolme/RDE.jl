@@ -207,7 +207,7 @@ Stores:
         s = (sign(Δp) + sign(Δm)) * T(0.5)
         σ[1] = s * min(abs(Δm), abs(Δp))
     end
-    @inbounds for i in 2:(N - 1)
+    @turbo for i in 2:(N - 1)
         Δp = u[i + 1] - u[i]
         Δm = u[i] - u[i - 1]
         s = (sign(Δp) + sign(Δm)) * T(0.5)
@@ -235,7 +235,7 @@ end
         σ2p = T(2.0) * Δp
         σ[1] = s * min(abs(σc), abs(σ2m), abs(σ2p))
     end
-    @inbounds for i in 2:(N - 1)
+    @turbo for i in 2:(N - 1)
         Δp = u[i + 1] - u[i]
         Δm = u[i] - u[i - 1]
         s = (sign(Δp) + sign(Δm)) * T(0.5)
@@ -281,7 +281,7 @@ function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::Fi
     u_xx[N] = (u[1] - 2 * u[N] + u[N - 1]) * inv_dx2
 
     λ_xx[1] = (λ[2] - 2 * λ[1] + λ[N]) * inv_dx2
-    @inbounds for i in 2:(N - 1)
+    @turbo for i in 2:(N - 1)
         λ_xx[i] = (λ[i + 1] - 2 * λ[i] + λ[i - 1]) * inv_dx2
     end
     λ_xx[N] = (λ[1] - 2 * λ[N] + λ[N - 1]) * inv_dx2
@@ -292,7 +292,7 @@ function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::Fi
     _limited_slope!(σ, u, method.limiter)
 
     # reconstruct interface states at i+1/2 stored at index i (1..N)
-    @inbounds for i in 1:(N - 1)
+    @turbo for i in 1:(N - 1)
         UL[i] = u[i] + T(0.5) * σ[i]
         UR[i] = u[i + 1] - T(0.5) * σ[i + 1]
     end
@@ -305,7 +305,7 @@ function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::Fi
     # ----------------------------
     # Rusanov (Lax–Friedrichs) numerical flux for f(u) = 0.5*u^2
     # ----------------------------
-    @inbounds for i in 1:N
+    @turbo for i in 1:N
         a = max(abs(UL[i]), abs(UR[i]))
         Fl = T(0.5) * UL[i] * UL[i]
         Fr = T(0.5) * UR[i] * UR[i]
@@ -315,7 +315,7 @@ function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::Fi
     inv_dx = one(T) / dx
     # conservative divergence: -(F_{i+1/2} - F_{i-1/2})/dx
     adv[1] = -(F̂[1] - F̂[N]) * inv_dx
-    @inbounds for i in 2:N
+    @turbo for i in 2:N
         adv[i] = -(F̂[i] - F̂[i - 1]) * inv_dx
     end
 

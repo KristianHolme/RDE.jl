@@ -623,3 +623,12 @@ function turbo_extrema(arr)
     end
     return minval, maxval
 end
+
+function turbo_diff_norm(u::AbstractVector{T}, v::AbstractVector{T}) where {T <: Real}
+    @assert length(u) == length(v)
+    nrm = zero(T)
+    @turbo for i in eachindex(u)
+        nrm += (u[i] - v[i])^2
+    end
+    return sqrt(nrm)
+end
