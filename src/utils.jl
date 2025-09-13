@@ -29,12 +29,12 @@ advection–diffusion system using the current velocity `u`.
 
 Returns a scalar dtmax; can be used with adaptive integrators to cap step size.
 """
-function cfl_dtmax(params::RDEParam, u::AbstractVector; safety = 0.9)
+function cfl_dtmax(params::RDEParam, u::AbstractVector; safety = 0.45)
     Δx = params.L / params.N
     umax = maximum(abs, u)
     νmax = max(params.ν_1, params.ν_2)
     @assert νmax > 0 "νmax must be positive"
-    @assert umax > 0 "umax must be positive"
+    @assert umax > 0 "umax must be positive, got $umax"
     adv_dt = (Δx / umax)
     diff_dt = Δx^2 / (2 * νmax)
     return safety * min(adv_dt, diff_dt)
