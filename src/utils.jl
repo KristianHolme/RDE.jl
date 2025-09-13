@@ -29,15 +29,46 @@ advection–diffusion system using the current velocity `u`.
 
 Returns a scalar dtmax; can be used with adaptive integrators to cap step size.
 """
-function cfl_dtmax(params::RDEParam, u::AbstractVector; safety = 0.45)
+function cfl_dtmax(params::RDEParam, u::AbstractVector; safety = 0.43)
     Δx = params.L / params.N
-    umax = maximum(abs, u)
-    νmax = max(params.ν_1, params.ν_2)
-    @assert νmax > 0 "νmax must be positive"
-    @assert umax > 0 "umax must be positive, got $umax"
-    adv_dt = (Δx / umax)
-    diff_dt = Δx^2 / (2 * νmax)
-    return safety * min(adv_dt, diff_dt)
+    umax = RDE.turbo_maximum_abs(u)
+
+    # Advection stability (only for u-equation). If umax == 0, no advective restriction.
+    adv_dt = umax > 0 ? (Δx / umax) : Inf
+
+    # Diffusion stability for both u and λ equations; if coefficient is zero, no diffusive restriction.
+    diff_dt_u = iszero(params.ν_1) ? Inf : (Δx^2 / (2 * params.ν_1))
+    diff_dt_λ = iszero(params.ν_2) ? Inf : (Δx^2 / (2 * params.ν_2))
+
+    return safety * min(adv_dt, diff_dt_u, diff_dt_λ)
+end
+
+"""
+    cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}; safety=T(0.43)) where {T<:AbstractFloat}
+
+Compute a conservative maximum time step including advection, u/λ diffusion, and a
+reaction-timescale limit using current control arrays in `cache`. Emits a debug log
+showing which limiter is active.
+"""
+function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}; safety::T = T(0.6)) where {T <: AbstractFloat}
+    Δx::T = params.L / params.N
+
+    # Advection (only u advects)
+    umax::T = RDE.turbo_maximum_abs(u)
+    adv_dt::T = umax > zero(T) ? (Δx / umax) : T(Inf)
+
+    # Diffusion limits
+    diff_dt_u::T = iszero(params.ν_1) ? T(Inf) : (Δx^2 / (2 * params.ν_1))
+    diff_dt_λ::T = iszero(params.ν_2) ? T(Inf) : (Δx^2 / (2 * params.ν_2))
+
+    # Reaction limit for λ using cached ω and β
+    react_sum_max::T = RDE.turbo_max_sum(cache.ωu, cache.βu)
+    react_dt::T = react_sum_max > zero(T) ? inv(react_sum_max) : T(Inf)
+
+    # Collect limits and pick the smallest
+    minval = min(adv_dt, diff_dt_u, diff_dt_λ, react_dt)
+    dtmax::T = safety * minval
+    return dtmax
 end
 
 function split_sol_view(uλ::Vector{T}) where {T <: Real}
@@ -232,20 +263,20 @@ Find the locations of shocks in a periodic function.
 # Returns
 - `CircularArray{Bool}`: Boolean array indicating shock locations
 """
-function shock_locations(u::AbstractArray, dx::Real)
+function shock_locations(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
     N = length(u)
     L = N * dx
-    minu, maxu = extrema(u)
+    minu, maxu = RDE.turbo_extrema(u)
     span = maxu - minu
-    if span < 1.0e-1
+    if span < T(1.0e-1)
         return CircularArray(fill(false, N))
     end
-    threshold = span / dx * 0.06
+    threshold = span / dx * T(0.06)
     u_diff = periodic_ddx(u, dx)
     shocks = CircularArray(-u_diff .> threshold)
     potential_shocks = findall(shocks)
 
-    backwards_block_distance = L * 0.06
+    backwards_block_distance = L * T(0.06)
     backwards_block = ceil(Int, backwards_block_distance / dx)
     for i in potential_shocks
         if any(@view shocks[(i + 1):(i + backwards_block)])
@@ -267,7 +298,7 @@ Find the indices of shocks in a periodic function.
 # Returns
 - `CircularArray{Int}`: Indices of shocks
 """
-function shock_indices(u::AbstractArray, dx::Real)
+function shock_indices(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
     return findall(shock_locations(u, dx))
 end
 
@@ -283,8 +314,9 @@ Count the number of shocks in a periodic function.
 # Returns
 - `Int`: Number of shocks detected
 """
-function count_shocks(u::AbstractArray, dx::Real)
-    return sum(shock_locations(u, dx))
+function count_shocks(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
+    shocks::Int = sum(shock_locations(u, dx))
+    return shocks
 end
 
 """
@@ -301,29 +333,29 @@ Shift solution arrays in a moving frame with velocity c.
 # Returns
 - Vector of shifted solutions
 """
-function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
-    c = fill(c, length(ts) - 1)
-    pos = [0.0; cumsum(c .* diff(ts))]
+function shift_inds_old(us::AbstractArray{T}, x::AbstractArray{T}, ts::AbstractArray{T}, c::T) where {T <: AbstractFloat}
+    c = fill(c, length(ts) - one(T))
+    pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances_old(us, x, pos)
 end
 
-function shift_inds_old(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
-    pos = [0.0; cumsum(c .* diff(ts))]
+function shift_inds_old(us::AbstractArray{T}, x::AbstractArray{T}, ts::AbstractArray{T}, c::AbstractArray{T}) where {T <: AbstractFloat}
+    pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances_old(us, x, pos)
 end
 
-function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::Real)
-    c = fill(c, length(ts) - 1)
-    pos = [0.0; cumsum(c .* diff(ts))]
+function shift_inds(us::Vector{Vector{T}}, x::AbstractVector{T}, ts::AbstractVector{T}, c::T) where {T <: AbstractFloat}
+    c = fill(c, length(ts) - one(T))
+    pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances(us, x, pos)
 end
 
-function shift_inds(us::AbstractArray, x::AbstractArray, ts::AbstractArray, c::AbstractArray)
-    pos = [0.0; cumsum(c .* diff(ts))]
+function shift_inds(us::Vector{Vector{T}}, x::AbstractVector{T}, ts::AbstractVector{T}, c::AbstractVector{T}) where {T <: AbstractFloat}
+    pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances(us, x, pos)
 end
 
-function shift_by_interdistances_old(us::AbstractArray, x::AbstractArray, pos::AbstractArray)
+function shift_by_interdistances_old(us::AbstractArray{T}, x::AbstractArray{T}, pos::AbstractArray{T}) where {T <: AbstractFloat}
     us = CircularArray.(us)
     shifted_us = similar(us)
     dx = x[2] - x[1]
@@ -384,40 +416,31 @@ const SHOCK_SPEED_MODEL = let
     end
 end
 
-"""
-    predict_speed(u_p::Real, n_shocks::Integer) -> Float64
-
-Predict shock wave speed for a single chamber pressure and number of shocks.
-
-# Arguments
-- `u_p::Real`: Chamber pressure
-- `n_shocks::Integer`: Number of shocks
-
-# Returns
-- `Float64`: Predicted speed
-"""
-function predict_speed(u_p::Real, n_shocks::Integer)
+function predict_speed(u_p::T, n_shocks::Integer) where {T <: AbstractFloat}
     new_data = DataFrame(u_p = [u_p], shocks = [n_shocks])
-    return predict(SHOCK_SPEED_MODEL, new_data)[1]
+    ŷ = predict(SHOCK_SPEED_MODEL, new_data)[1]
+    return T(ŷ)
 end
 
-function predict_speed(u_p::AbstractArray, n_shocks::Integer)
+function predict_speed(u_p::AbstractArray{T}, n_shocks::Integer) where {T <: AbstractFloat}
     new_data = DataFrame(
         u_p = collect(u_p),
         shocks = fill(n_shocks, length(u_p))
     )
-    return predict(SHOCK_SPEED_MODEL, new_data)
+    ŷ = predict(SHOCK_SPEED_MODEL, new_data)
+    return T.(ŷ)
 end
 
-function predict_speed(u_p::Real, n_shocks::AbstractArray)
+function predict_speed(u_p::T, n_shocks::AbstractArray{Int}) where {T <: AbstractFloat}
     new_data = DataFrame(
         u_p = fill(u_p, length(n_shocks)),
         shocks = collect(n_shocks)
     )
-    return predict(SHOCK_SPEED_MODEL, new_data)
+    ŷ = predict(SHOCK_SPEED_MODEL, new_data)
+    return T.(ŷ)
 end
 
-function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
+function predict_speed(u_p::AbstractArray{T}, n_shocks::AbstractArray{Int}) where {T <: AbstractFloat}
     if length(u_p) != length(n_shocks)
         throw(DimensionMismatch("Length of u_p ($(length(u_p))) must match length of n_shocks ($(length(n_shocks)))"))
     end
@@ -425,7 +448,8 @@ function predict_speed(u_p::AbstractArray, n_shocks::AbstractArray)
         u_p = collect(u_p),
         shocks = collect(n_shocks)
     )
-    return predict(SHOCK_SPEED_MODEL, new_data)
+    ŷ = predict(SHOCK_SPEED_MODEL, new_data)
+    return T.(ŷ)
 end
 
 """
@@ -497,7 +521,105 @@ The grid spacing is calculated as the difference between the first two grid poin
 dx = get_dx(prob)
 ```
 """
-function get_dx(prob::RDEProblem{T}) where {T}
+function get_dx(prob::RDEProblem{T})::T where {T}
     dx::T = prob.x[2] - prob.x[1]
     return dx
+end
+
+"""
+    turbo_maximum(arr) -> Real
+
+Compute the maximum value of an array using @turbo for performance.
+
+# Arguments
+- `arr`: Input array
+
+# Returns
+- Maximum value in the array
+"""
+function turbo_maximum(arr)
+    maxval = arr[1]
+    @turbo for i in eachindex(arr)
+        maxval = max(maxval, arr[i])
+    end
+    return maxval
+end
+
+"""
+    turbo_minimum(arr) -> Real
+
+Compute the minimum value of an array using @turbo for performance.
+
+# Arguments
+- `arr`: Input array
+
+# Returns
+- Minimum value in the array
+"""
+function turbo_minimum(arr)
+    minval = arr[1]
+    @turbo for i in eachindex(arr)
+        minval = min(minval, arr[i])
+    end
+    return minval
+end
+
+"""
+    turbo_maximum_abs(arr) -> Real
+
+Compute the maximum absolute value of an array using @turbo for performance.
+
+# Arguments
+- `arr`: Input array
+
+# Returns
+- Maximum absolute value in the array
+"""
+function turbo_maximum_abs(arr)
+    maxval = abs(arr[1])
+    @turbo for i in eachindex(arr)
+        maxval = max(maxval, abs(arr[i]))
+    end
+    return maxval
+end
+
+"""
+    turbo_max_sum(u::Vector{T}, v::Vector{T}) where {T<:Real} -> T
+
+Compute the maximum of element-wise sums u[i] + v[i] using @turbo for performance.
+
+# Arguments
+- `u::Vector{T}`: First input vector
+- `v::Vector{T}`: Second input vector
+
+# Returns
+- Maximum value of u[i] + v[i] across all indices
+"""
+function turbo_max_sum(u::Vector{T}, v::Vector{T}) where {T <: Real}
+    maxval = zero(T)
+    @turbo for i in eachindex(u)
+        maxval = max(maxval, u[i] + v[i])
+    end
+    return maxval
+end
+
+"""
+    turbo_extrema(arr) -> (minval, maxval)
+
+Compute both the minimum and maximum of an array in one `@turbo` pass.
+
+# Arguments
+- `arr`: Input array
+
+# Returns
+- Tuple `(minval, maxval)` with the array extrema
+"""
+function turbo_extrema(arr)
+    minval = arr[1]
+    maxval = arr[1]
+    @turbo for i in eachindex(arr)
+        minval = min(minval, arr[i])
+        maxval = max(maxval, arr[i])
+    end
+    return minval, maxval
 end

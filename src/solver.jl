@@ -91,7 +91,7 @@ The RDE system consists of coupled PDEs for velocity (u) and reaction progress (
 - Supports both pseudospectral and finite difference methods
 - Includes periodic boundary conditions
 """
-function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
+function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     N = prob.params.N
     ν_1 = prob.params.ν_1
     ν_2 = prob.params.ν_2
@@ -150,9 +150,9 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem, t)
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
     write_advection!(du, u, cache)
-    @turbo @. du = du + (1.0f0 - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
+    @turbo @. du = du + (one(T) - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
-    @turbo @. dλ = (1.0f0 - λ) * ωu - βu * λ + ν_2 * λ_xx
+    @turbo @. dλ = (one(T) - λ) * ωu - βu * λ + ν_2 * λ_xx
 
     return nothing
 end
@@ -206,7 +206,14 @@ Multiple-dispatch overload for FiniteVolumeMethod: uses adaptive stepping with a
 SSP RK by default, with a dynamic dtmax enforced via a DiscreteCallback based on
 `cfl_dtmax`. If `saveat` is a vector, the solver will hit those exact times.
 """
-function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = nothing, dtmax = nothing, safety = 0.9, kwargs...) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
+function solve_pde!(
+        prob::RDEProblem{T, M, R, C};
+        solver = SSPRK33(),
+        saveat = nothing,
+        dtmax = nothing,
+        safety::T = T(0.9),
+        kwargs...,
+    ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
     uλ_0 = vcat(prob.u0, prob.λ0)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
     default_saveat = isnothing(saveat) ? (prob.params.tmax / 75) : saveat
@@ -216,13 +223,22 @@ function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = n
     # Dynamic dtmax via callback to respect CFL while allowing adaptive substeps to hit saveat
     function cfl_affect!(integrator)
         u = view(integrator.u, 1:prob.params.N)
-        integrator.opts.dtmax = isnothing(dtmax) ? cfl_dtmax(prob.params, u; safety = safety) : dtmax
+        if isnothing(dtmax)
+            integrator.opts.dtmax = cfl_dtmax(prob.params, u, prob.method.cache; safety = T(safety))
+        else
+            integrator.opts.dtmax = dtmax
+        end
+        return integrator.opts.dtmax
     end
     cfl_condition(u, t, integrator) = true
     cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
 
     # Enforce initial dtmax from initial condition as well
-    dtmax0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0; safety = safety) : dtmax
+    if isnothing(dtmax)
+        dtmax0 = cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety = T(safety))
+    else
+        dtmax0 = dtmax
+    end
 
     sol = OrdinaryDiffEq.solve(prob_ode, solver; adaptive = true, dtmax = dtmax0, saveat = default_saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
     if sol.retcode != :Success
@@ -236,7 +252,14 @@ end
 
 Multiple-dispatch overload for UpwindMethod, same behavior as FiniteVolumeMethod.
 """
-function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = nothing, dtmax = nothing, safety = 0.9, kwargs...) where {T <: AbstractFloat, M <: UpwindMethod, R <: AbstractReset, C <: AbstractControlShift}
+function solve_pde!(
+        prob::RDEProblem{T, M, R, C};
+        solver = SSPRK33(),
+        saveat = nothing,
+        dtmax = nothing,
+        safety::T = T(0.9),
+        kwargs...,
+    ) where {T <: AbstractFloat, M <: UpwindMethod, R <: AbstractReset, C <: AbstractControlShift}
     uλ_0 = vcat(prob.u0, prob.λ0)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
     default_saveat = isnothing(saveat) ? (prob.params.tmax / 75) : saveat
@@ -245,12 +268,21 @@ function solve_pde!(prob::RDEProblem{T, M, R, C}; solver = SSPRK33(), saveat = n
 
     function cfl_affect!(integrator)
         u = view(integrator.u, 1:prob.params.N)
-        integrator.opts.dtmax = isnothing(dtmax) ? cfl_dtmax(prob.params, u; safety = safety) : dtmax
+        if isnothing(dtmax)
+            integrator.opts.dtmax = cfl_dtmax(prob.params, u, prob.method.cache; safety = T(safety))
+        else
+            integrator.opts.dtmax = dtmax
+        end
+        return integrator.opts.dtmax
     end
     cfl_condition(u, t, integrator) = true
     cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
 
-    dtmax0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0; safety = safety) : dtmax
+    if isnothing(dtmax)
+        dtmax0 = cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety = T(safety))
+    else
+        dtmax0 = dtmax
+    end
 
     sol = OrdinaryDiffEq.solve(prob_ode, solver; adaptive = true, dtmax = dtmax0, saveat = default_saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
     if sol.retcode != :Success
