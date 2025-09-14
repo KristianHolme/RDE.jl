@@ -271,7 +271,8 @@ function shock_locations(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
     if span < T(1.0e-1)
         return CircularArray(fill(false, N))
     end
-    threshold = span / dx * T(0.06)
+    # threshold = span / dx * T(0.06)
+    threshold = span * T(0.06 * 512 / L)
     u_diff = periodic_ddx(u, dx)
     shocks = CircularArray(-u_diff .> threshold)
     potential_shocks = findall(shocks)
