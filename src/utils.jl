@@ -275,13 +275,15 @@ function shock_locations(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
     threshold = span * T(0.06 * 512 / L)
     u_diff = periodic_ddx(u, dx)
     shocks = CircularArray(-u_diff .> threshold)
-    potential_shocks = findall(shocks)
-
     backwards_block_distance = L * T(0.06)
     backwards_block = ceil(Int, backwards_block_distance / dx)
-    for i in potential_shocks
-        if any(@view shocks[(i + 1):(i + backwards_block)])
-            shocks[i] = false
+    @inbounds @views begin
+        i = findfirst(shocks)
+        while i !== nothing
+            if any(shocks[(i + 1):(i + backwards_block)])
+                shocks[i] = false
+            end
+            i = findnext(shocks, i + 1)
         end
     end
     return shocks
@@ -523,8 +525,11 @@ dx = get_dx(prob)
 ```
 """
 function get_dx(prob::RDEProblem{T})::T where {T}
-    dx::T = prob.x[2] - prob.x[1]
-    return dx
+    return get_dx(prob.params)
+end
+
+function get_dx(params::RDEParam{T})::T where {T}
+    return params.L / params.N
 end
 
 """
@@ -632,4 +637,28 @@ function turbo_diff_norm(u::AbstractVector{T}, v::AbstractVector{T}) where {T <:
         nrm += (u[i] - v[i])^2
     end
     return sqrt(nrm)
+end
+
+"""
+    turbo_column_maximum(A::AbstractMatrix{T}) where {T} -> Vector{T}
+
+Compute the maximum value in each column of a matrix using @turbo for performance.
+
+# Arguments
+- `A::AbstractMatrix{T}`: Input matrix
+
+# Returns
+- `Vector{T}`: Vector containing the maximum value of each column
+"""
+function turbo_column_maximum(A::AbstractMatrix{T}) where {T}
+    nrows, ncols = size(A)
+    result = Vector{T}(undef, ncols)
+    @turbo for j in 1:ncols
+        maxval = A[1, j]
+        for i in 2:nrows
+            maxval = max(maxval, A[i, j])
+        end
+        result[j] = maxval
+    end
+    return result
 end
