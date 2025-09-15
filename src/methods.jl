@@ -144,10 +144,10 @@ end
 
 function reset_cache!(cache::AbstractRDECache; τ_smooth::AbstractFloat, params::RDEParam)
     cache.τ_smooth = τ_smooth
-    cache.u_p_previous = fill(params.u_p, params.N)
-    cache.u_p_current = fill(params.u_p, params.N)
-    cache.s_previous = fill(params.s, params.N)
-    cache.s_current = fill(params.s, params.N)
+    fill!(cache.u_p_previous, params.u_p)
+    fill!(cache.u_p_current, params.u_p)
+    fill!(cache.s_previous, params.s)
+    fill!(cache.s_current, params.s)
     return nothing
 end
 
