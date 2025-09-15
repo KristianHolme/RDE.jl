@@ -186,7 +186,7 @@ end
 Initialize the cache for the finite-volume method with the problem parameters.
 """
 function init_cache!(method::FiniteVolumeMethod{T, L}, params::RDEParam{T}, dx::T) where {T <: AbstractFloat, L <: AbstractLimiter}
-    return method.cache = FVCache{T}(params, dx)
+    return method.cache = FVCache{T}(params)
 end
 
 """

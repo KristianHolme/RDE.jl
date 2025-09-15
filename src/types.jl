@@ -419,12 +419,14 @@ mutable struct FVCache{T <: AbstractFloat} <: AbstractRDECache{T}
 end
 
 """
-    FVCache{T}(params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
+    FVCache{T}(params::RDEParam{T}) where {T<:AbstractFloat}
 
 Construct a cache for finite-volume method computations.
 """
-function FVCache{T}(params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
+function FVCache{T}(params::RDEParam{T}) where {T <: AbstractFloat}
     N = params.N
+    L = params.L
+    dx = L / N
     return FVCache{T}(
         Vector{T}(undef, N),  # u_xx
         Vector{T}(undef, N),  # λ_xx
@@ -436,7 +438,7 @@ function FVCache{T}(params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
         Vector{T}(undef, N),  # UR (i+1/2)
         Vector{T}(undef, N),  # F̂ (i+1/2)
         Vector{T}(undef, N),  # adv residual
-        dx,
+        dx,                   # dx
         N,
         fill(params.u_p, N),  # u_p_current
         fill(params.u_p, N),  # u_p_previous
