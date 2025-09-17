@@ -70,7 +70,7 @@ prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=false))
 function RDEProblem(
         params::RDEParam{T};
         reset_strategy::R = Default(),
-        method::M = FiniteDifferenceMethod{T}(),
+        method::M = FiniteVolumeMethod{T}(),
         control_shift_strategy::C = ZeroControlShift()
     ) where {T <: AbstractFloat, R <: AbstractReset, M <: AbstractMethod, C <: AbstractControlShift}
 
