@@ -151,34 +151,6 @@ function reset_cache!(cache::AbstractRDECache; τ_smooth::AbstractFloat, params:
     return nothing
 end
 
-"""
-    init_cache!(method::UpwindMethod{T}, params::RDEParam{T}, dx::T) where {T<:AbstractFloat}
-
-Initialize the cache for the upwind method with the problem parameters.
-"""
-function init_cache!(method::UpwindMethod{T}, params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
-    N = params.N
-    return method.cache = UpwindRDECache{T}(
-        Vector{T}(undef, N),  # u_x
-        Vector{T}(undef, N),  # u_xx
-        Vector{T}(undef, N),  # λ_xx
-        Vector{T}(undef, N),  # ωu
-        Vector{T}(undef, N),  # ξu
-        Vector{T}(undef, N),  # βu
-        dx,                   # dx
-        N,                    # N
-        fill(params.u_p, N),  # u_p_current
-        fill(params.u_p, N),  # u_p_previous
-        T(1),                 # τ_smooth
-        fill(params.s, N),    # s_previous
-        fill(params.s, N),    # s_current
-        T(0),                 # control_time
-        fill(params.u_p, N),  # u_p_t
-        fill(params.s, N),    # s_t
-        fill(params.u_p, N),  # u_p_t_shifted
-        fill(params.s, N),    # s_t_shifted
-    )
-end
 
 """
     init_cache!(method::FiniteVolumeMethod{T, L}, params::RDEParam{T}, dx::T) where {T<:AbstractFloat, L<:AbstractLimiter}
@@ -318,74 +290,6 @@ function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::Fi
     @turbo for i in 2:N
         adv[i] = -(F̂[i] - F̂[i - 1]) * inv_dx
     end
-
-    return nothing
-end
-
-"""
-    calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::UpwindMethod{T}) where {T <: AbstractFloat}
-
-Calculate spatial derivatives using upwinding scheme appropriate for the RDE system.
-
-# Arguments
-- `u`: Energy/pressure-like field (always positive)
-- `λ`: Reaction progress
-- `method`: Upwind method containing grid parameters and workspace arrays
-
-# Implementation Notes
-- Uses backward differences for upwinding since the advection term is `-u*u_x` with `u > 0`
-- This creates waves propagating from left to right (positive x-direction)
-- Supports both first-order and second-order upwinding based on the `order` parameter
-- Uses second-order central differences for second derivatives
-- Handles periodic boundary conditions explicitly
-- Computes first and second derivatives for u
-- Computes second derivative for λ
-- Optimized with @turbo macro for performance
-"""
-function calc_derivatives!(u::AbstractArray{T}, λ::AbstractArray{T}, method::UpwindMethod{T}) where {T <: AbstractFloat}
-    cache = method.cache
-    dx = cache.dx
-    N = cache.N
-    inv_dx = one(T) / dx
-    inv_dx2 = one(T) / (dx^2)
-    order = method.order
-
-    # Preallocated arrays
-    u_x = cache.u_x
-    u_xx = cache.u_xx
-    λ_xx = cache.λ_xx
-
-    # Compute u_x using upwind differences appropriate for -u*u_x term
-    # with periodic boundary conditions
-    if order == 1
-        # First-order upwind (backward differences)
-        @inbounds u_x[1] = (u[1] - u[N]) * inv_dx
-        @turbo for i in 2:N
-            u_x[i] = (u[i] - u[i - 1]) * inv_dx
-        end
-    else
-        # Second-order upwind (3-point stencil)
-        # boundaries
-        @inbounds u_x[1] = (3 * u[1] - 4 * u[N] + u[N - 1]) * (T(0.5) * inv_dx)
-        @inbounds u_x[2] = (3 * u[2] - 4 * u[1] + u[N]) * (T(0.5) * inv_dx)
-        @turbo for i in 3:N
-            u_x[i] = (3 * u[i] - 4 * u[i - 1] + u[i - 2]) * (T(0.5) * inv_dx)
-        end
-    end
-
-    # Compute u_xx using central differences with periodic boundary conditions
-    u_xx[1] = (u[2] - 2 * u[1] + u[N]) * inv_dx2
-    @turbo for i in 2:(N - 1)
-        u_xx[i] = (u[i + 1] - 2 * u[i] + u[i - 1]) * inv_dx2
-    end
-    u_xx[N] = (u[1] - 2 * u[N] + u[N - 1]) * inv_dx2
-
-    # Compute λ_xx using central differences with periodic boundary conditions
-    λ_xx[1] = (λ[2] - 2 * λ[1] + λ[N]) * inv_dx2
-    @turbo for i in 2:(N - 1)
-        λ_xx[i] = (λ[i + 1] - 2 * λ[i] + λ[i - 1]) * inv_dx2
-    end
-    λ_xx[N] = (λ[1] - 2 * λ[N] + λ[N - 1]) * inv_dx2
 
     return nothing
 end
