@@ -205,12 +205,12 @@ Construct a cache for finite difference method computations.
 function FDRDECache{T}(params::RDEParam{T}, dx::T) where {T <: AbstractFloat}
     N = params.N
     return FDRDECache{T}(
-        Vector{T}(undef, N),  # u_x
-        Vector{T}(undef, N),  # u_xx
-        Vector{T}(undef, N),  # λ_xx
-        Vector{T}(undef, N),  # ωu
-        Vector{T}(undef, N),  # ξu
-        Vector{T}(undef, N),  # βu
+        zeros(T, N),          # u_x
+        zeros(T, N),          # u_xx
+        zeros(T, N),          # λ_xx
+        zeros(T, N),          # ωu
+        zeros(T, N),          # ξu
+        zeros(T, N),          # βu
         dx,                   # dx
         N,                    # N
         fill(params.u_p, N),  # u_p_current
@@ -347,16 +347,16 @@ function FVCache{T}(params::RDEParam{T}) where {T <: AbstractFloat}
     L = params.L
     dx = L / N
     return FVCache{T}(
-        Vector{T}(undef, N),  # u_xx
-        Vector{T}(undef, N),  # λ_xx
-        Vector{T}(undef, N),  # ωu
-        Vector{T}(undef, N),  # ξu
-        Vector{T}(undef, N),  # βu
-        Vector{T}(undef, N),  # σ
-        Vector{T}(undef, N),  # UL (i+1/2)
-        Vector{T}(undef, N),  # UR (i+1/2)
-        Vector{T}(undef, N),  # F̂ (i+1/2)
-        Vector{T}(undef, N),  # adv residual
+        zeros(T, N),          # u_xx
+        zeros(T, N),          # λ_xx
+        zeros(T, N),          # ωu
+        zeros(T, N),          # ξu
+        zeros(T, N),          # βu
+        zeros(T, N),          # σ
+        zeros(T, N),          # UL (i+1/2)
+        zeros(T, N),          # UR (i+1/2)
+        zeros(T, N),          # F̂ (i+1/2)
+        zeros(T, N),          # adv residual
         dx,                   # dx
         N,
         fill(params.u_p, N),  # u_p_current
