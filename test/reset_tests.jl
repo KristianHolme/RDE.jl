@@ -3,7 +3,7 @@ using RDE
 
 @testitem "Default Reset" begin
     prob = RDEProblem(RDEParam{Float32}(N = 32), reset_strategy = Default())
-    @test prob.u0 ≈ (3.0f0 / 2.0f0) .* sech.(prob.x .- 1.0f0) .^ 20.0f0
+    @test prob.u0 ≈ (3.0f0 / 2.0f0) .* (sech.(prob.x .- 1.0f0) .^ 20.0f0)
     @test prob.λ0 ≈ 0.5f0 .* ones(Float32, prob.params.N)
     @test prob.params.u_p ≈ 0.5f0
 end

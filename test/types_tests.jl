@@ -56,8 +56,8 @@ end
 
     # Test with default method
     prob = RDEProblem(params)
-    @test prob.method isa FiniteDifferenceMethod{Float32}
-    @test prob.method.cache isa RDE.FDRDECache{Float32}
+    @test prob.method isa FiniteVolumeMethod{Float32}
+    @test prob.method.cache isa RDE.FVCache{Float32}
     @test prob.reset_strategy isa Default
     @test prob.control_shift_strategy isa ZeroControlShift
 

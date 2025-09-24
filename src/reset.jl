@@ -1,8 +1,8 @@
-function default_u(x::T) where {T<:AbstractFloat}
-    return T(1.0) * sech(x - T(1.0)) ^ 20
+function default_u(x::T) where {T <: AbstractFloat}
+    return T(1.5) * sech(x - T(1.0))^20
 end
 
-function default_λ(x::T) where {T<:AbstractFloat}
+function default_λ(x::T) where {T <: AbstractFloat}
     return T(0.5)
 end
 
@@ -36,7 +36,7 @@ function resample_data(data::Vector{T}, N::Int) where {T}
     end
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::Default) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::Default) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     x = prob.x
     prob.u0 .= default_u.(x)
     prob.λ0 .= default_λ.(x)
@@ -44,7 +44,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::NShock) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::NShock) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     n = reset_strategy.n
     if !(1 ≤ n ≤ 4)
         throw(ArgumentError("n must be between 1 and 4"))
@@ -64,7 +64,7 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomShock
 end
 
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomCombination) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     weights = softmax(rand(T, 4), T(reset_strategy.temp))
 
     # Use pre-computed matrices
@@ -80,7 +80,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomShockOrCombination) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomShockOrCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     if rand(T) < T(reset_strategy.shock_prob)
         reset_state_and_pressure!(prob, NShock(rand(1:4)))
     else
@@ -105,7 +105,7 @@ function SineCombination(; modes = 2:9)
     return SineCombination(collect(modes))
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::SineCombination) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::SineCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     x = prob.x
     modes = reset_strategy.modes
     shifts = rand(T, length(modes)) .* (T(2) * T(π))
@@ -132,7 +132,7 @@ struct WeightedCombination <: AbstractReset
     end
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::WeightedCombination) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::WeightedCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     wT = T.(reset_strategy.weights)
     wave = SHOCK_MATRICES.shocks * wT
     fuel = SHOCK_MATRICES.fuels * wT
@@ -146,7 +146,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CustomPressureReset) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CustomPressureReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     x = prob.x
     prob.u0 .= T.(reset_strategy.f(x))
     prob.λ0 .= default_λ.(x)
@@ -160,7 +160,7 @@ end
 end
 
 #TODO: use a cycle(iterator), but only for julia 1.11+
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CycleShockReset) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     reset_state_and_pressure!(prob, NShock(reset_strategy.shocks[mod1(reset_strategy.n, length(reset_strategy.shocks))]))
     reset_strategy.n += 1
     return nothing
@@ -168,14 +168,16 @@ end
 
 struct RandomReset <: AbstractReset end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomReset) where {T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     x = prob.x
     L = prob.params.L
 
     # Generate random periodic trigonometric series with decaying amplitudes
     # y(x) = baseline + Σ_{k=1..K} (a_k / k^p) * cos(2π k x / L + φ_k)
-    function random_trig_series(x::AbstractVector{T}, L::T; K::Int = 12,
-            amplitude::T = T(1), decay::T = T(1.5), baseline::T = T(0))
+    function random_trig_series(
+            x::AbstractVector{T}, L::T; K::Int = 12,
+            amplitude::T = T(1), decay::T = T(1.5), baseline::T = T(0)
+        )
         y = fill(baseline, length(x))
         twoπ = T(2) * T(π)
         @inbounds for k in 1:K
@@ -199,4 +201,3 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     prob.params.u_p = T(0.5)
     return nothing
 end
-    

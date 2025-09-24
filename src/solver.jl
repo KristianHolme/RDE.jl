@@ -183,15 +183,12 @@ solve_pde!(prob)
 solve_pde!(prob, solver=Rodas4())  # Use a different solver
 ```
 """
-function solve_pde!(prob::RDEProblem; solver = Tsit5(), saveframes = 75, kwargs...)
-    uλ_0 = vcat(prob.u0, prob.λ0)
+function solve_pde!(prob::RDEProblem; saveframes = 75, kwargs...)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
-
     saveat = prob.params.tmax / saveframes
 
-    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
-
-    sol = OrdinaryDiffEq.solve(prob_ode, solver; saveat = saveat, isoutofdomain = outofdomain, kwargs...)
+    # Reuse the shared solve_pde_step! logic for non-FiniteVolume methods
+    sol = solve_pde_step!(prob; tspan = tspan, saveat = saveat, kwargs...)
     if sol.retcode != :Success
         @warn "failed to solve PDE"
     end
@@ -200,31 +197,26 @@ function solve_pde!(prob::RDEProblem; solver = Tsit5(), saveframes = 75, kwargs.
 end
 
 """
-    solve_pde!(prob::RDEProblem{T, FiniteVolumeMethod, R, C}; solver=SSPRK33(), saveat=nothing, dtmax=nothing, safety=0.9, kwargs...)
+    solve_pde_step!(prob::RDEProblem{T, FiniteVolumeMethod, R, C}; tspan, saveat=nothing, dtmax=nothing, safety=0.9, kwargs...)
 
-Multiple-dispatch overload for FiniteVolumeMethod: uses adaptive stepping with an
-SSP RK by default, with a dynamic dtmax enforced via a DiscreteCallback based on
-`cfl_dtmax`. If `saveat` is a vector, the solver will hit those exact times.
+Solve a single step for FiniteVolumeMethod with CFL logic.
 """
-function solve_pde!(
-        prob::RDEProblem{T, M, R, C};
-        solver = SSPRK33(),
+function solve_pde_step!(
+        prob::RDEProblem{T, FiniteVolumeMethod, R, C};
+        tspan,
         saveat = nothing,
         dtmax = nothing,
         safety::T = T(0.9),
-        kwargs...,
-    ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
+        kwargs...
+    ) where {T <: AbstractFloat, R <: AbstractReset, C <: AbstractControlShift}
     uλ_0 = vcat(prob.u0, prob.λ0)
-    tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
-    default_saveat = isnothing(saveat) ? (prob.params.tmax / 75) : saveat
-
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
-    # Dynamic dtmax via callback to respect CFL while allowing adaptive substeps to hit saveat
+    # CFL logic
     function cfl_affect!(integrator)
         u = view(integrator.u, 1:prob.params.N)
         if isnothing(dtmax)
-            integrator.opts.dtmax = cfl_dtmax(prob.params, u, prob.method.cache; safety = T(safety))
+            integrator.opts.dtmax = cfl_dtmax(prob.params, u, prob.method.cache; safety)
         else
             integrator.opts.dtmax = dtmax
         end
@@ -233,16 +225,35 @@ function solve_pde!(
     cfl_condition(u, t, integrator) = true
     cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
 
-    # Enforce initial dtmax from initial condition as well
     if isnothing(dtmax)
-        dtmax0 = cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety = T(safety))
+        dtmax0 = cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety)
     else
         dtmax0 = dtmax
     end
 
-    sol = OrdinaryDiffEq.solve(prob_ode, solver; adaptive = true, dtmax = dtmax0, saveat = default_saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
+    sol = OrdinaryDiffEq.solve(prob_ode, SSPRK33(); adaptive = false, dtmax = dtmax0, saveat = saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
     if sol.retcode != :Success
-        @warn "failed to solve PDE"
+        @warn "Failed to solve PDE step for FiniteVolumeMethod"
     end
-    return prob.sol = sol
+    return sol
+end
+
+"""
+    solve_pde_step!(prob::RDEProblem{T, M, R, C}; tspan, saveat=nothing, kwargs...) where M <: AbstractMethod
+
+Solve a single step for other methods (e.g., Pseudospectral, FiniteDifference) without CFL.
+"""
+function solve_pde_step!(
+        prob::RDEProblem{T, M, R, C};
+        tspan,
+        saveat = nothing,
+        kwargs...
+    ) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    uλ_0 = vcat(prob.u0, prob.λ0)
+    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = outofdomain, kwargs...)
+    if sol.retcode != :Success
+        @warn "Failed to solve PDE step for $M"
+    end
+    return sol
 end

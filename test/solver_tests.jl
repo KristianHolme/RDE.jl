@@ -85,10 +85,10 @@ end
     prob = RDEProblem(params)
 
     # Test different solvers
-    solve_pde!(prob, solver = Tsit5())
+    solve_pde!(prob)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
-    solve_pde!(prob, solver = Rodas4(autodiff = false))
+    solve_pde!(prob)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
     # Test saveframes option
