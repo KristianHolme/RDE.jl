@@ -21,27 +21,7 @@ function split_sol(uλ::Vector{T}) where {T <: Real}
     return u, λ
 end
 
-"""
-    cfl_dtmax(params::RDEParam, u::AbstractVector; safety=0.9)
-
-Compute a conservative maximum time step from CFL constraints for the
-advection–diffusion system using the current velocity `u`.
-
-Returns a scalar dtmax; can be used with adaptive integrators to cap step size.
-"""
-function cfl_dtmax(params::RDEParam, u::AbstractVector; safety = 0.43)
-    Δx = params.L / params.N
-    umax = RDE.turbo_maximum_abs(u)
-
-    # Advection stability (only for u-equation). If umax == 0, no advective restriction.
-    adv_dt = umax > 0 ? (Δx / umax) : Inf
-
-    # Diffusion stability for both u and λ equations; if coefficient is zero, no diffusive restriction.
-    diff_dt_u = iszero(params.ν_1) ? Inf : (Δx^2 / (2 * params.ν_1))
-    diff_dt_λ = iszero(params.ν_2) ? Inf : (Δx^2 / (2 * params.ν_2))
-
-    return safety * min(adv_dt, diff_dt_u, diff_dt_λ)
-end
+# Removed the older two-argument cfl_dtmax; use the cache-aware, typed version below.
 
 """
     cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}; safety=T(0.43)) where {T<:AbstractFloat}
