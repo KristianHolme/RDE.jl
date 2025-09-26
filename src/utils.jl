@@ -403,7 +403,7 @@ const SHOCK_MATRICES = let
     end
 end
 
-const SHOCK_PRESSURES = [0.5f0, 0.64f0, 0.84f0, 0.96f0]
+const SHOCK_PRESSURES = [0.5f0, 0.65f0, 0.85f0, 0.98f0]
 
 const SHOCK_SPEED_MODEL = let
     data_file = joinpath(@__DIR__, "..", "data", "speed_model.jld2")
