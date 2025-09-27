@@ -5,6 +5,7 @@ version = "0.0.1"
 
 [deps]
 CircularArrays = "7a955b69-7140-5f4e-a0ed-f168c5e2e749"
+DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
@@ -25,12 +26,13 @@ StatsModels = "3eaba693-59b7-5ba5-a881-562e759f1c8d"
 
 [compat]
 CircularArrays = "1.4"
+DiffEqCallbacks = "4.9.0"
 DataFrames = "1.7.0"
 FFTW = "1"
 FileIO = "1"
 GLM = "1.9.0"
 Interpolations = "0"
-JLD2 = "0.4.28 - 0.5"
+JLD2 = "0.4.28 - 0.5, 0.6"
 Logging = "1"
 LoopVectorization = "0.12"
 Makie = "0"

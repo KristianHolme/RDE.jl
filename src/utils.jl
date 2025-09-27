@@ -30,7 +30,7 @@ Compute a conservative maximum time step including advection, u/λ diffusion, an
 reaction-timescale limit using current control arrays in `cache`. Emits a debug log
 showing which limiter is active.
 """
-function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}; safety::T = T(0.6)) where {T <: AbstractFloat}
+function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}) where {T <: AbstractFloat}
     Δx::T = params.L / params.N
 
     # Advection (only u advects)
@@ -46,9 +46,8 @@ function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDE
     react_dt::T = react_sum_max > zero(T) ? inv(react_sum_max) : T(Inf)
 
     # Collect limits and pick the smallest
-    minval = min(adv_dt, diff_dt_u, diff_dt_λ, react_dt)
-    dtmax::T = safety * minval
-    return dtmax
+    minval::T = min(adv_dt, diff_dt_u, diff_dt_λ, react_dt)
+    return minval
 end
 
 function split_sol_view(uλ::Vector{T}) where {T <: Real}
@@ -187,6 +186,20 @@ Calculate chamber pressure for multiple states.
 """
 function chamber_pressure(uλs::Vector{Vector{T}}, params::RDEParam) where {T <: Real}
     return [chamber_pressure(uλ, params) for uλ in uλs]
+end
+
+"""
+    cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)::AbstractFloat
+
+Maximum stable timestep (CFL-based) for the finite-volume method derived from
+current state `u`, problem parameters, and cached reaction terms.
+Reuses the cache-aware `cfl_dtmax` helper.
+"""
+function cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)
+    params = prob.params
+    N = params.N
+    uview = @view u[1:N]
+    return cfl_dtmax(params, uview, prob.method.cache)
 end
 
 """

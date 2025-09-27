@@ -13,6 +13,7 @@ using LoopVectorization
 using Makie
 using Observables
 using OrdinaryDiffEq
+using DiffEqCallbacks
 using ProgressMeter
 using Random
 using Statistics

@@ -212,26 +212,16 @@ function solve_pde_step!(
     uλ_0 = vcat(prob.u0, prob.λ0)
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
 
-    # CFL logic
-    function cfl_affect!(integrator)
-        u = view(integrator.u, 1:prob.params.N)
-        if isnothing(dtmax)
-            integrator.opts.dtmax = cfl_dtmax(prob.params, u, prob.method.cache; safety)
-        else
-            integrator.opts.dtmax = dtmax
-        end
-        return integrator.opts.dtmax
-    end
-    cfl_condition(u, t, integrator) = true
-    cfl_cb = DiscreteCallback(cfl_condition, cfl_affect!; save_positions = (false, false))
+    cfl_cb = StepsizeLimiter(
+        cfl_dtFE;
+        safety_factor = T(0.62),
+        max_step = true,
+        cached_dtcache = zero(T)
+    )
 
-    if isnothing(dtmax)
-        dtmax0 = cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety)
-    else
-        dtmax0 = dtmax
-    end
+    dt0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety) : dtmax
 
-    sol = OrdinaryDiffEq.solve(prob_ode, SSPRK33(); adaptive = false, dtmax = dtmax0, saveat = saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
+    sol = OrdinaryDiffEq.solve(prob_ode, SSPRK33(); adaptive = false, dt = dt0, saveat = saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
     if sol.retcode != :Success
         @warn "Failed to solve PDE step for FiniteVolumeMethod"
     end
@@ -251,6 +241,7 @@ function solve_pde_step!(
     ) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     uλ_0 = vcat(prob.u0, prob.λ0)
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+
     sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = outofdomain, kwargs...)
     if sol.retcode != :Success
         @warn "Failed to solve PDE step for $M"
