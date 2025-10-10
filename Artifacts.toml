@@ -1,0 +1,6 @@
+[data]
+git-tree-sha1 = "effc6614d502791d37075e701fdaa4d9ef65bed4"
+
+    [[data.download]]
+    sha256 = "980217095d297e353e979cd895fe71e2be278f509f38273ca72428e03511493b"
+    url = "https://gist.github.com/KristianHolme/6d50f6d7b15b8f54197b3281fd1863f2/raw/effc6614d502791d37075e701fdaa4d9ef65bed4.tar.gz"

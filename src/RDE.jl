@@ -14,6 +14,7 @@ using Makie
 using Observables
 using OrdinaryDiffEq
 using DiffEqCallbacks
+using Pkg.Artifacts
 using ProgressMeter
 using Random
 using Statistics

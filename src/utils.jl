@@ -371,19 +371,37 @@ function shift_by_interdistances(us::AbstractArray, x::AbstractArray, pos::Abstr
 end
 
 const SHOCK_DATA = let
-    data_file = joinpath(@__DIR__, "..", "data", "shocks.jld2")
-    if !isfile(data_file)
-        # throw(ErrorException("Shock data file not found: $data_file"))
-        @warn "Shock data file not found: $data_file"
-        return nothing
-    end
     try
+        # Get path to Artifacts.toml
+        artifacts_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
+
+        # Ensure artifact is installed
+        data_hash = artifact_hash("data", artifacts_toml)
+        if data_hash === nothing
+            @warn "Artifact 'data' not found in Artifacts.toml"
+            return nothing
+        end
+
+        # This will download the artifact if it's not already present
+        ensure_artifact_installed("data", artifacts_toml)
+
+        # Get the artifact directory
+        data_dir = artifact_path(data_hash)
+        data_file = joinpath(data_dir, "shocks.jld2")
+
+        if !isfile(data_file)
+            @warn "Shock data file not found in artifact: $data_file"
+            return nothing
+        end
+
         Dict(n => Dict(:u => (load(data_file, "u$n")), :λ => (load(data_file, "λ$n"))) for n in 1:4)
     catch e
-        @warn "Failed to load shock data: $e"
+        @warn "Failed to load shock data from artifact: $e"
         return nothing
     end
 end
+
+const SHOCK_PRESSURES = [0.5f0, 0.65f0, 0.85f0, 0.98f0]
 
 const SHOCK_MATRICES = let
     if !@isdefined(SHOCK_DATA) || (@isdefined(SHOCK_DATA) && SHOCK_DATA === nothing)
@@ -396,18 +414,34 @@ const SHOCK_MATRICES = let
     end
 end
 
-const SHOCK_PRESSURES = [0.5f0, 0.65f0, 0.85f0, 0.98f0]
-
+#TODO: deprecate this?
 const SHOCK_SPEED_MODEL = let
-    data_file = joinpath(@__DIR__, "..", "data", "speed_model.jld2")
-    if !isfile(data_file)
-        @warn "Shock speed model file not found: $data_file"
-        return nothing
-    end
     try
+        # Get path to Artifacts.toml
+        artifacts_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
+
+        # Ensure artifact is installed
+        data_hash = artifact_hash("data", artifacts_toml)
+        if data_hash === nothing
+            @warn "Artifact 'data' not found in Artifacts.toml"
+            return nothing
+        end
+
+        # This will download the artifact if it's not already present
+        ensure_artifact_installed("data", artifacts_toml)
+
+        # Get the artifact directory
+        data_dir = artifact_path(data_hash)
+        data_file = joinpath(data_dir, "speed_model.jld2")
+
+        if !isfile(data_file)
+            @warn "Shock speed model file not found in artifact: $data_file"
+            return nothing
+        end
+
         load_object(data_file)
     catch e
-        @warn "Failed to load shock speed model: $e"
+        @warn "Failed to load shock speed model from artifact: $e"
         return nothing
     end
 end

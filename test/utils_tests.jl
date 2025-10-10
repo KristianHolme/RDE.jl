@@ -16,8 +16,27 @@ end
 end
 
 @testitem "count_shocks" begin
-    import JLD2: @load
-    @load "test_data/shocks.jld2" u1 u2 u3 u4
+    using Pkg.Artifacts
+    using JLD2
+
+    # Get path to Artifacts.toml (in the parent directory of test/)
+    artifacts_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
+
+    # Ensure artifact is installed
+    data_hash = artifact_hash("data", artifacts_toml)
+    @test data_hash !== nothing
+    ensure_artifact_installed("data", artifacts_toml)
+
+    # Get the artifact directory and load data
+    data_dir = artifact_path(data_hash)
+    data_file = joinpath(data_dir, "shocks.jld2")
+    @test isfile(data_file)
+
+    u1 = load(data_file, "u1")
+    u2 = load(data_file, "u2")
+    u3 = load(data_file, "u3")
+    u4 = load(data_file, "u4")
+
     dx = Float32(2π / 512)
     @test RDE.count_shocks(u1, dx) == 1
     @test RDE.count_shocks(u2, dx) == 2
