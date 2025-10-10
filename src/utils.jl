@@ -689,3 +689,28 @@ function turbo_column_maximum(A::AbstractMatrix{T}) where {T}
     end
     return result
 end
+
+"""
+    turbo_column_maximum!(output::AbstractVector{T}, A::AbstractMatrix{T}) where {T} -> AbstractVector{T}
+
+In-place version of turbo_column_maximum that writes column maximums directly into output.
+
+# Arguments
+- `output::AbstractVector{T}`: Pre-allocated vector to store the column maximums (length must equal number of columns in A)
+- `A::AbstractMatrix{T}`: Input matrix
+
+# Returns
+- `AbstractVector{T}`: The output vector (same as input for convenience)
+"""
+function turbo_column_maximum!(output::AbstractVector{T}, A::AbstractMatrix{T}) where {T}
+    nrows, ncols = size(A)
+    @assert length(output) == ncols "Output vector length must match number of columns in A"
+    @turbo for j in 1:ncols
+        maxval = A[1, j]
+        for i in 2:nrows
+            maxval = max(maxval, A[i, j])
+        end
+        output[j] = maxval
+    end
+    return output
+end
