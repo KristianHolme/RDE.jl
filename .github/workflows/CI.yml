@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
+          # - '1.10'# doesnt support [sources] in project.toml
           - '1'
           - 'pre'
         os:
