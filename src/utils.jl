@@ -667,6 +667,27 @@ function turbo_diff_norm(u::AbstractVector{T}, v::AbstractVector{T}) where {T <:
 end
 
 """
+    turbo_maximum_abs_diff(u::AbstractVector{T}, v::AbstractVector{T}) where {T<:Real} -> T
+
+Compute the maximum of element-wise absolute differences |u[i] - v[i]| using @turbo for performance.
+
+# Arguments
+- `u::AbstractVector{T}`: First input vector
+- `v::AbstractVector{T}`: Second input vector
+
+# Returns
+- Maximum value of |u[i] - v[i]| across all indices
+"""
+function turbo_maximum_abs_diff(u::AbstractVector{T}, v::AbstractVector{T}) where {T <: Real}
+    @assert length(u) == length(v) "Vectors must have same length"
+    maxval = zero(T)
+    @turbo for i in eachindex(u)
+        maxval = max(maxval, abs(u[i] - v[i]))
+    end
+    return maxval
+end
+
+"""
     turbo_column_maximum(A::AbstractMatrix{T}) where {T} -> Vector{T}
 
 Compute the maximum value in each column of a matrix using @turbo for performance.
