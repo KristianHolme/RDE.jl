@@ -201,3 +201,27 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     prob.params.u_p = T(0.5)
     return nothing
 end
+
+# ----------------------------------------------------------------------------
+# EvalCycleShockReset
+# ----------------------------------------------------------------------------
+mutable struct EvalCycleShockReset <: AbstractReset
+    init_shocks::Vector{Int}
+    current_config::Int
+    repetitions_per_config::Int
+    function EvalCycleShockReset(repetitions_per_config::Int)
+        init_shocks = vcat([repeat(setdiff(1:4, i), inner = repetitions_per_config) for i in 1:4]...)
+        return new(init_shocks, 1, repetitions_per_config)
+    end
+end
+
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::EvalCycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    reset_strategy.current_config += 1
+    if reset_strategy.current_config > length(reset_strategy.init_shocks)
+        reset_strategy.current_config = 1
+    end
+    current_config = reset_strategy.current_config
+    temp_reset_strategy = NShock(reset_strategy.init_shocks[current_config])
+    reset_state_and_pressure!(prob, temp_reset_strategy)
+    return nothing
+end

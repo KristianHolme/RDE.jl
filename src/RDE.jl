@@ -36,7 +36,7 @@ export AbstractLimiter, MinmodLimiter, MCLimiter
 export AbstractReset, Default, NShock, RandomCombination,
     RandomShockOrCombination, RandomShock, ShiftReset,
     SineCombination, WeightedCombination, CustomPressureReset, CycleShockReset,
-    RandomReset
+    RandomReset, EvalCycleShockReset
 export AbstractControlShift, ZeroControlShift, LinearControlShift
 
 # Core simulator includes
