@@ -65,3 +65,66 @@ end
         @test 60 ≤ n_shocks ≤ 95  # Allow for some random variation
     end
 end
+
+@testitem "EvalCycleShockReset Initialization" begin
+    reset_strat = EvalCycleShockReset(4)
+    @test reset_strat.repetitions_per_config == 4
+    @test reset_strat.current_config == 0 #initially set to bc we reset once at problem construction
+    @test length(reset_strat.init_shocks) == 48  # 4 goals × 3 non-goal shocks × 4 repetitions
+
+    # Verify the pattern: [2,2,2,2,3,3,3,3,4,4,4,4,1,1,1,1,3,3,3,3,4,4,4,4,1,1,1,1,2,2,2,2,4,4,4,4,1,1,1,1,2,2,2,2,3,3,3,3]
+    expected_pattern = vcat(
+        [2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],  # Goal 1: non-goal shocks repeated
+        [1, 1, 1, 1, 3, 3, 3, 3, 4, 4, 4, 4],  # Goal 2: non-goal shocks repeated
+        [1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4],  # Goal 3: non-goal shocks repeated
+        [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],   # Goal 4: non-goal shocks repeated
+    )
+    @test reset_strat.init_shocks == expected_pattern
+end
+
+@testitem "EvalCycleShockReset Custom Repetitions" begin
+    reset_strat = EvalCycleShockReset(2)
+    @test length(reset_strat.init_shocks) == 24  # 4 goals × 3 non-goal shocks × 2 repetitions
+
+    # Verify the pattern: [2,2,3,3,4,4,1,1,3,3,4,4,1,1,2,2,4,4,1,1,2,2,3,3]
+    expected_pattern = vcat(
+        [2, 2, 3, 3, 4, 4],  # Goal 1: non-goal shocks repeated
+        [1, 1, 3, 3, 4, 4],  # Goal 2: non-goal shocks repeated
+        [1, 1, 2, 2, 4, 4],  # Goal 3: non-goal shocks repeated
+        [1, 1, 2, 2, 3, 3],   # Goal 4: non-goal shocks repeated
+    )
+    @test reset_strat.init_shocks == expected_pattern
+end
+
+@testitem "EvalCycleShockReset Wrap Around" begin
+    reset_strat = EvalCycleShockReset(2)
+    prob = RDEProblem(RDEParam{Float32}(N = 32), reset_strategy = reset_strat)
+
+    # Go through all 24 configurations using actual reset function
+    for i in 1:24
+        RDE.reset_state_and_pressure!(prob, reset_strat)
+    end
+
+    # Should have wrapped around to config 1
+    @test reset_strat.current_config == 1
+end
+
+@testitem "EvalCycleShockReset State Loading" begin
+    reset_strat = EvalCycleShockReset(4)
+    prob = RDEProblem(RDEParam{Float32}(N = 32), reset_strategy = reset_strat)
+
+    # Test that reset_state_and_pressure! works correctly
+    # This should load the first shock (2) from the first goal phase
+    RDE.reset_state_and_pressure!(prob, reset_strat)
+    @test reset_strat.current_config == 2  # Should increment after reset
+
+    # Test a few more resets to verify cycling
+    for i in 1:5
+        RDE.reset_state_and_pressure!(prob, reset_strat)
+    end
+    @test reset_strat.current_config == 7  # Should be at 7th config
+
+    # Verify the pressure matches expected shock pressure
+    expected_shock = reset_strat.init_shocks[6]  # Current config - 1
+    @test prob.params.u_p ≈ RDE.SHOCK_PRESSURES[expected_shock]
+end

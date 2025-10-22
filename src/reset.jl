@@ -211,13 +211,14 @@ mutable struct EvalCycleShockReset <: AbstractReset
     repetitions_per_config::Int
     function EvalCycleShockReset(repetitions_per_config::Int)
         init_shocks = vcat([repeat(setdiff(1:4, i), inner = repetitions_per_config) for i in 1:4]...)
-        return new(init_shocks, 1, repetitions_per_config)
+        #initially set to bc we reset once at problem construction
+        return new(init_shocks, 0, repetitions_per_config)
     end
 end
 
 function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::EvalCycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     reset_strategy.current_config += 1
-    if reset_strategy.current_config > length(reset_strategy.init_shocks)
+    if reset_strategy.current_config > length(reset_strategy.init_shocks) #wrap around
         reset_strategy.current_config = 1
     end
     current_config = reset_strategy.current_config
