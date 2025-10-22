@@ -92,6 +92,7 @@ mutable struct PseudospectralRDECache{T <: AbstractFloat} <: AbstractRDECache{T}
     dealias_filter::Vector{T}
     ik::Vector{Complex{T}}
     k2::Vector{T}
+    dx::T
     u_p_current::Vector{T}
     u_p_previous::Vector{T}
     τ_smooth::T
@@ -138,6 +139,7 @@ function PseudospectralRDECache{T}(
         plan_irfft(Vector{Complex{T}}(undef, N_complex), N, flags = FFTW.MEASURE),
         dealias_filter,
         ik, k2,
+        params.L / params.N,  # dx
         fill(params.u_p, N), fill(params.u_p, N), T(1),
         fill(params.s, N), fill(params.s, N),
         T(0),

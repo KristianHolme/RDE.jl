@@ -84,12 +84,6 @@ The RDE system consists of coupled PDEs for velocity (u) and reaction progress (
 ```math
 \\frac{∂λ}{∂t} = (1-λ)ω(u) - β(u)λ + ν_2\\frac{∂^2λ}{∂x^2}
 ```
-
-# Implementation Notes
-- Uses in-place operations for efficiency
-- Handles smooth control transitions
-- Supports both pseudospectral and finite difference methods
-- Includes periodic boundary conditions
 """
 function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     N = prob.params.N
@@ -128,7 +122,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: Abstra
     smooth_control!(s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
 
     # Calculate shift based on current time
-    dx = prob.params.L / prob.params.N
+    dx = cache.dx
     shift = Int(round(get_control_shift(prob.control_shift_strategy, u, t) / dx))
 
     # Apply shifts
