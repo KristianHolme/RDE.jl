@@ -430,8 +430,8 @@ end
 
 struct RandomShock <: AbstractReset end
 
-struct ShiftReset <: AbstractReset
-    reset_strategy::AbstractReset
+struct ShiftReset{R <: AbstractReset} <: AbstractReset
+    reset_strategy::R
 end
 
 struct CustomPressureReset <: AbstractReset
