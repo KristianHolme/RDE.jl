@@ -6,6 +6,14 @@ struct LinearControlShift <: AbstractControlShift
     c::Real
 end
 
+"""
+    get_control_shift(control_shift_strategy::AbstractControlShift, u::AbstractVector, t::Real) -> Real
+
+    Get the control shift for the given control shift strategy, state, and time. shift is in x-units, 
+        e.g. π means shift for half the length of the domain. Shift should be positive if the u_p is shifted in the flow direction, negative otherwise.
+"""
+function get_control_shift end
+
 function get_control_shift(control_shift_strategy::AbstractControlShift, u::AbstractVector, t::Real)
     throw(ErrorException("get_control_shift not implemented for control shift strategy $(typeof(control_shift_strategy))"))
 end
