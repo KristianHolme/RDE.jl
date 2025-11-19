@@ -127,8 +127,8 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: Abstra
 
     # Apply shifts
     if shift != 0
-        circshift!(cache.u_p_t_shifted, cache.u_p_t, -shift)
-        circshift!(cache.s_t_shifted, cache.s_t, -shift)
+        circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
+        circshift!(cache.s_t_shifted, cache.s_t, shift)
     else
         cache.u_p_t_shifted .= cache.u_p_t
         cache.s_t_shifted .= cache.s_t
