@@ -101,11 +101,22 @@ Features:
 - Loop control
 """
 function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
-    # Slider
-    sld = Slider(play_ctrl_area[1, 1], range = 1:num_times, startvalue = 1)
-    on(sld.value) do val
+    # SliderGrid with time and speed sliders
+    sg = SliderGrid(
+        play_ctrl_area[1, 1],
+        (label = "Time", range = 1:num_times, startvalue = 1),
+        (label = "Speed", range = 0.1:0.1:5.0, startvalue = 1.0, format = x -> "$(round(x, digits = 1))x")
+    )
+    time_sld = sg.sliders[1]
+    speed_sld = sg.sliders[2]
+
+    on(time_sld.value) do val
         time_idx[] = Int(round(val))
-        # @info "SLIDER ACTIVATED"
+    end
+
+    anim_speed = Observable(1.0)
+    on(speed_sld.value) do val
+        anim_speed[] = val
     end
 
     # Button area
@@ -116,7 +127,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
 
     on(start_button.clicks) do _
         time_idx[] = 1
-        set_close_to!(sld, time_idx[])
+        set_close_to!(time_sld, time_idx[])
     end
     # step back button
     prev_button = Button(button_area[1, 2], label = "<", tellwidth = false)
@@ -125,7 +136,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
         if time_idx[] > 1
             time_idx[] -= 1
         end
-        set_close_to!(sld, time_idx[])
+        set_close_to!(time_sld, time_idx[])
     end
 
 
@@ -136,14 +147,14 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
         if time_idx[] < num_times
             time_idx[] += 1
         end
-        set_close_to!(sld, time_idx[])
+        set_close_to!(time_sld, time_idx[])
     end
     # step to end button
     end_button = Button(button_area[1, 4], label = ">>", tellwidth = false)
 
     on(end_button.clicks) do _
         time_idx[] = num_times
-        set_close_to!(sld, time_idx[])
+        set_close_to!(time_sld, time_idx[])
     end
 
     # Play/Pause button
@@ -172,17 +183,18 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
         end
     end
 
-
-    # Animation speed Slider
-    anim_speed = Observable(1.0)
-    anim_sld = Slider(play_ctrl_area[2, 2], range = 0.1:0.1:5.0, startvalue = 1.0)
-    on(anim_sld.value) do val
-        anim_speed[] = val
+    # Keyboard listener for spacebar to toggle play/pause
+    # Access scene through the button's blockscene
+    on(events(play.blockscene).keyboardbutton) do event
+        if event.action == Keyboard.press && event.key == Keyboard.space
+            playing[] = !playing[]
+            if playing[]
+                play.label[] = "Pause"
+            else
+                play.label[] = "Play"
+            end
+        end
     end
-
-    #Animation speed label
-    anim_speed_label = Label(play_ctrl_area[1, 2], text = @lift("Speed: $(round($anim_speed, digits = 2))"), tellwidth = false)
-
 
     # Animation loop
     return @async begin
@@ -197,7 +209,7 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
                         time_idx[] = 1
                     end
                 end
-                set_close_to!(sld, time_idx[])
+                set_close_to!(time_sld, time_idx[])
             end
             sleep(0.05 / anim_speed[])
         end
@@ -312,7 +324,8 @@ function main_plotting(
         subfuncs_axes = []
     end
 
-
+    unwrapped_layout = plotting_area_main[1, 1] = GridLayout()
+    circle_layout = plotting_area_main[1, 2] = GridLayout()
     #Plotting u and λ
     if hard_u_limit
         u_limit = 2.9
@@ -322,10 +335,10 @@ function main_plotting(
         twoDlimits = @lift((nothing, (0.0, max($u_max * 1.05, 1.0e-3))))
         threeDlimits = @lift((nothing, nothing, (0, max($u_max * 1.05, 1.0e-3))))
     end
-    ax_u = Axis(plotting_area_main[1, 1], xlabel = "x", ylabel = "u(x, t)", title = "u(x, t)", limits = twoDlimits)
-    ax_λ = Axis(plotting_area_main[2, 1], xlabel = "x", ylabel = "λ(x, t)", title = "λ(x, t)", limits = (nothing, (-0.05, 1.05)))
-    ax_u_circ = Axis3(plotting_area_main[1, 2], limits = threeDlimits, protrusions = 0)
-    ax_λ_circ = Axis3(plotting_area_main[2, 2], limits = (nothing, nothing, (-0.05, 1.05)), protrusions = 0)
+    ax_u = Axis(unwrapped_layout[1, 1], xlabel = "x", ylabel = "u(x, t)", title = "u(x, t)", limits = twoDlimits)
+    ax_λ = Axis(unwrapped_layout[2, 1], xlabel = "x", ylabel = "λ(x, t)", title = "λ(x, t)", limits = (nothing, (-0.05, 1.05)))
+    ax_u_circ = Axis3(circle_layout[1, 1], limits = threeDlimits, protrusions = 0)
+    ax_λ_circ = Axis3(circle_layout[2, 1], limits = (nothing, nothing, (-0.05, 1.05)), protrusions = 0)
 
     circle_indices = [1:params.N; 1]
 
@@ -356,7 +369,7 @@ function main_plotting(
         end
         # @show layout
         # Function to update the x_cursor when the mouse is over any axis
-        on(events(layout.parent.parent.scene).mouseposition) do position
+        on(events(layout.parent.parent.parent.scene).mouseposition) do position
             for ax in linear_axes
                 if is_mouseinside(ax.scene)
                     position = mouseposition(ax.scene)
