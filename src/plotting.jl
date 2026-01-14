@@ -83,6 +83,17 @@ function get_u_max(us)
 end
 
 """
+Get scene from top level.
+"""
+function top_scene(layout::GridLayout)
+    if hasproperty(layout, :parent)
+        return top_scene(layout.parent)
+    else
+        return layout.scene
+    end
+end
+
+"""
     plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
 
 Add interactive playback controls to a figure.
@@ -369,7 +380,7 @@ function main_plotting(
         end
         # @show layout
         # Function to update the x_cursor when the mouse is over any axis
-        on(events(layout.parent.parent.parent.scene).mouseposition) do position
+        on(events(top_scene(layout)).mouseposition) do position
             for ax in linear_axes
                 if is_mouseinside(ax.scene)
                     position = mouseposition(ax.scene)

@@ -13,12 +13,6 @@ u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)
 \lambda_t = (1-\lambda)\omega(u) - \beta (u, u_p, s)\lambda + \nu_{2}\lambda_{xx}
 ```
 
-## Features
-
-- **Multiple Discretization Methods**: Supports both finite difference and pseudospectral methods for spatial discretization
-- **Flexible Parameter Control**: Easy modification of system parameters and initial conditions
-- **Analysis Tools**: Built-in functions for energy balance and chamber pressure calculations
-
 ## Installation
 
 You can install RDE.jl using Julia's built-in package manager. From the Julia REPL, type `]` to enter the Pkg REPL mode and run:
@@ -51,38 +45,26 @@ plot_solution(rde_prob)
 
 ### Custom Initial Conditions
 ```julia
-reset_strategy = NShock(2)
+reset_strategy = NShock(2) # Initialize with 2 shocks
 prob = RDEProblem(params;reset_strategy)
 solve_pde!(prob)
 
-# Or use random shock initialization
-reset_strategy = RandomShock()
+# Or use random shock initialization (1-4 shocks)
+reset_strategy = RandomShock() 
 params = RDEParam()
 prob = RDEProblem(params;reset_strategy)
+
+# or use a custom function for the u-variable
+reset_strategy = CustomPressureReset() do x
+  T = eltype(x)
+  return abs(x)/T(π)
+end
+prob = RDEProblem(params;reset_strategy)
+solve_pde!(prob)
+plot_solution(prob)
 ```
 
-### Analysis
-```julia
-# Calculate energy balance
-energy = energy_balance(prob.sol.u, prob.params)
 
-# Calculate chamber pressure
-pressure = chamber_pressure(prob.sol.u, prob.params)
-
-# Visualize results
-using GLMakie
-
-fig = Figure()
-ax1 = Axis(fig[1, 1], xlabel="t", ylabel="Energy Balance")
-ax2 = Axis(fig[2, 1], xlabel="t", ylabel="Chamber Pressure")
-
-lines!(ax1, prob.sol.t, energy)
-lines!(ax2, prob.sol.t, pressure)
-
-fig
-```
-
-For reinforcement learning applications with RDE systems or functionality for interactive control, please see the companion package [RDE_Env.jl](https://github.com/KristianHolme/RDE_Env.jl).
 
 ## References
 
