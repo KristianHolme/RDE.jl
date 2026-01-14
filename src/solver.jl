@@ -181,31 +181,23 @@ function solve_pde!(prob::RDEProblem; saveframes = 75, kwargs...)
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
     saveat = prob.params.tmax / saveframes
 
-    # Reuse the shared solve_pde_step! logic for non-FiniteVolume methods
-    sol = solve_pde_step!(prob; tspan = tspan, saveat = saveat, kwargs...)
+    uλ_0 = vcat(prob.u0, prob.λ0)
+    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+    sol = solve_pde_step(prob, prob_ode; saveat = saveat, kwargs...)
     if sol.retcode != :Success
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
-    return prob.sol = sol
+    prob.sol = sol
+    return prob
 end
 
-"""
-    solve_pde_step!(prob::RDEProblem{T, FiniteVolumeMethod, R, C}; tspan, saveat=nothing, dtmax=nothing, safety=0.9, kwargs...)
+function solve_pde_step(rdeproblem::RDEProblem{T, M, R, C}, ode_problem::ODEProblem; kwargs...) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    sol = OrdinaryDiffEq.solve(ode_problem, Tsit5(); adaptive = true, isoutofdomain = outofdomain, kwargs...)
+    return sol
+end
 
-Solve a single step for FiniteVolumeMethod with CFL logic.
-"""
-function solve_pde_step!(
-        prob::RDEProblem{T, FiniteVolumeMethod, R, C};
-        tspan,
-        saveat = nothing,
-        dtmax = nothing,
-        safety::T = T(0.9),
-        kwargs...
-    ) where {T <: AbstractFloat, R <: AbstractReset, C <: AbstractControlShift}
-    uλ_0 = vcat(prob.u0, prob.λ0)
-    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
-
+function solve_pde_step(rde_problem::RDEProblem{T, FiniteVolumeMethod, R, C}, ode_problem::ODEProblem; kwargs...) where {T <: AbstractFloat, R <: AbstractReset, C <: AbstractControlShift}
     cfl_cb = StepsizeLimiter(
         cfl_dtFE;
         safety_factor = T(0.62),
@@ -213,32 +205,9 @@ function solve_pde_step!(
         cached_dtcache = zero(T)
     )
 
-    dt0 = isnothing(dtmax) ? cfl_dtmax(prob.params, prob.u0, prob.method.cache; safety) : dtmax
+    N = rde_problem.params.N
+    dt0 = cfl_dtmax(rde_problem.params, @view(ode_problem.u0[1:N]), rde_problem.method.cache)
 
-    sol = OrdinaryDiffEq.solve(prob_ode, SSPRK33(); adaptive = false, dt = dt0, saveat = saveat, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
-    if sol.retcode != :Success
-        @warn "Failed to solve PDE step for FiniteVolumeMethod"
-    end
-    return sol
-end
-
-"""
-    solve_pde_step!(prob::RDEProblem{T, M, R, C}; tspan, saveat=nothing, kwargs...) where M <: AbstractMethod
-
-Solve a single step for other methods (e.g., Pseudospectral, FiniteDifference) without CFL.
-"""
-function solve_pde_step!(
-        prob::RDEProblem{T, M, R, C};
-        tspan,
-        saveat = nothing,
-        kwargs...
-    ) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
-    uλ_0 = vcat(prob.u0, prob.λ0)
-    prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
-
-    sol = OrdinaryDiffEq.solve(prob_ode, Tsit5(); adaptive = true, saveat = saveat, isoutofdomain = outofdomain, kwargs...)
-    if sol.retcode != :Success
-        @warn "Failed to solve PDE step for $M"
-    end
+    sol = OrdinaryDiffEq.solve(ode_problem, SSPRK33(); adaptive = false, dt = dt0, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
     return sol
 end

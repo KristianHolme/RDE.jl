@@ -24,7 +24,7 @@ end
 # Removed the older two-argument cfl_dtmax; use the cache-aware, typed version below.
 
 """
-    cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}; safety=T(0.43)) where {T<:AbstractFloat}
+    cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}) where {T<:AbstractFloat}
 
 Compute a conservative maximum time step including advection, u/λ diffusion, and a
 reaction-timescale limit using current control arrays in `cache`. Emits a debug log
