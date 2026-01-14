@@ -85,13 +85,8 @@ end
 """
 Get scene from top level.
 """
-function top_scene(layout::GridLayout)
-    if hasproperty(layout, :parent)
-        return top_scene(layout.parent)
-    else
-        return layout.scene
-    end
-end
+top_scene(layout::GridLayout) = top_scene(layout.parent)
+top_scene(fig::Figure) = fig.scene
 
 """
     plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_times::Int)
