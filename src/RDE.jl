@@ -47,13 +47,22 @@ include("solver.jl")       # Solver implementation
 include("plotting.jl")     # Plotting functions
 include("animations.jl")   # Animation functions
 
-@compile_workload begin
-    try
-        # Simulate tiny case for a short time
-        prob = RDEProblem(RDEParam(; N = 64, tmax = 0.01))
-        solve_pde!(prob)
-    catch e
-        @warn "Precompilation failure: $e"
+@setup_workload begin
+    params = RDEParam(; N = 32, tmax = 0.01)
+    prob = RDEProblem(params)
+    uλ_0 = vcat(prob.u0, prob.λ0)
+    tspan = (zero(params.tmax), params.tmax)
+    ode_problem = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
+    @compile_workload begin
+        duλ = similar(uλ_0)
+        RDE_RHS!(duλ, uλ_0, prob, zero(params.tmax))
+        solve_pde_step(
+            prob,
+            ode_problem;
+            adaptive = false,
+            dt = params.tmax / 10,
+            callback = nothing
+        )
     end
 end
 end
