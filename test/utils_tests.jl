@@ -15,6 +15,35 @@ end
     @test RDE.get_dx(prob) ≈ 2π / 512
 end
 
+@testitem "cfl_dtFE uses current state" begin
+    params = RDEParam{Float32}(
+        N = 8,
+        L = 2π,
+        ν_1 = 0.0f0,
+        ν_2 = 0.0f0,
+        u_c = 1.0f0,
+        α = 0.5f0,
+        k_param = 5.0f0,
+        u_p = 0.5f0,
+        s = 3.5f0
+    )
+    prob = RDEProblem(params)
+
+    u = fill(2.0f0, params.N)
+    λ = zeros(Float32, params.N)
+    uλ = vcat(u, λ)
+
+    fill!(prob.method.cache.ωu, 0.0f0)
+    fill!(prob.method.cache.βu, 0.0f0)
+
+    ω_max = RDE.ω(2.0f0, params.u_c, params.α)
+    β_max = RDE.β(2.0f0, params.s, params.u_p, params.k_param)
+    expected = inv(ω_max + β_max)
+
+    dt = RDE.cfl_dtFE(uλ, prob, 0.0f0)
+    @test isapprox(dt, expected; rtol = 1.0e-4)
+end
+
 @testitem "count_shocks" begin
     using Pkg.Artifacts
     using JLD2

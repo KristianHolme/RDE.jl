@@ -49,7 +49,7 @@ Construct an RDE problem with given parameters.
 
 # Keywords
 - `reset_strategy::AbstractReset = DefaultReset()`: Reset strategy
-- `method::AbstractMethod = FiniteDifferenceMethod{T}()`: Numerical method
+- `method::AbstractMethod = FiniteVolumeMethod{T}()`: Numerical method
 - `control_shift_strategy::AbstractControlShift = ZeroControlShift()`: Control shift strategy
 
 # Returns
@@ -57,14 +57,8 @@ Construct an RDE problem with given parameters.
 
 # Examples
 ```julia
-# Using finite difference method (default)
+# Using finite-volume method (default)
 prob = RDEProblem(params)
-
-# Using pseudospectral method with dealiasing
-prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=true))
-
-# Using pseudospectral method without dealiasing
-prob = RDEProblem(params, method=PseudospectralMethod{Float64}(dealias=false))
 ```
 """
 function RDEProblem(
@@ -83,7 +77,7 @@ function RDEProblem(
         params, Vector{T}(undef, params.N), Vector{T}(undef, params.N),
         x, reset_strategy, nothing, method, control_shift_strategy
     )
-    set_init_state!(prob) #state may have been erased when creating fft plans in pseudospectral cache
+    set_init_state!(prob)
     return prob
 end
 

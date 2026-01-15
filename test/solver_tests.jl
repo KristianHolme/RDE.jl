@@ -1,27 +1,9 @@
-using Test
-using RDE
-using OrdinaryDiffEq
-
 @testitem "Basic Solver" begin
     using OrdinaryDiffEq
     for T in [Float32, Float64]
         prob = RDEProblem(RDEParam{T}(N = 512, tmax = 0.01))
         solve_pde!(prob)
         @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
-    end
-end
-
-@testitem "FFT Plans" begin
-    for T in [Float32, Float64]
-        prob = RDEProblem(
-            RDEParam{T}(N = 128, tmax = 5.0),
-            method = PseudospectralMethod{T}()
-        )
-        cache = prob.method.cache
-        u0 = prob.u0
-        u0_hat = cache.fft_plan * u0
-        u0_hat_hat = cache.ifft_plan * u0_hat
-        @test u0_hat_hat ≈ u0
     end
 end
 
@@ -64,19 +46,59 @@ end
 @testitem "Long Integration" begin
     using OrdinaryDiffEq
     for T in [Float32, Float64]
-        # Test finite difference method
-        prob_fd = RDEProblem(RDEParam{T}(N = 512, tmax = 5.0))
-        solve_pde!(prob_fd)
-        @test prob_fd.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
-
-        # Test pseudospectral method
-        prob_ps = RDEProblem(
-            RDEParam{T}(N = 1024, tmax = 5.0),
-            method = PseudospectralMethod{T}()
-        )
-        solve_pde!(prob_ps)
-        @test prob_ps.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+        prob = RDEProblem(RDEParam{T}(N = 512, tmax = 5.0))
+        solve_pde!(prob)
+        @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
     end
+end
+
+@testitem "FV shock speed (Burgers limit)" begin
+    using OrdinaryDiffEq
+    params = RDEParam{Float32}(
+        N = 256,
+        L = 2π,
+        q_0 = 0.0f0,
+        ϵ = 0.0f0,
+        ν_1 = 0.0f0,
+        ν_2 = 0.0f0,
+        u_c = 100.0f0,
+        α = 1.0f0,
+        s = 0.0f0,
+        tmax = 0.1f0
+    )
+    prob = RDEProblem(params)
+    x = prob.x
+    x0 = Float32(π)
+
+    uL = 2.0f0
+    uR = 1.0f0
+    prob.u0 .= ifelse.(x .< x0, uL, uR)
+    prob.λ0 .= 0.5f0
+
+    solve_pde!(prob; saveframes = 10, alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+    u_final, = RDE.split_sol(prob.sol.u[end])
+
+    dx = RDE.get_dx(prob)
+    shock_inds = RDE.shock_indices(u_final, dx)
+    @test !isempty(shock_inds)
+
+    expected_speed = 0.5f0 * (uL + uR)
+    expected_pos = mod(x0 + expected_speed * params.tmax, params.L)
+    est_pos = x[shock_inds[1]]
+
+    dist = abs(mod(est_pos - expected_pos + params.L / 2, params.L) - params.L / 2)
+    @test dist ≤ 4 * dx
+end
+
+@testitem "FV solution bounds" begin
+    using OrdinaryDiffEq
+    params = RDEParam{Float32}(N = 128, tmax = 0.5f0)
+    prob = RDEProblem(params)
+    solve_pde!(prob; saveframes = 5, alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+
+    u_final, λ_final = RDE.split_sol(prob.sol.u[end])
+    @test all(u_final .>= 0.0f0)
+    @test all((0.0f0 .<= λ_final) .& (λ_final .<= 1.0f0))
 end
 
 @testitem "Solver Options" begin
@@ -84,11 +106,10 @@ end
     params = RDEParam{Float32}(N = 512, tmax = 1.0)
     prob = RDEProblem(params)
 
-    # Test different solvers
     solve_pde!(prob)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
-    solve_pde!(prob)
+    solve_pde!(prob; alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
     # Test saveframes option

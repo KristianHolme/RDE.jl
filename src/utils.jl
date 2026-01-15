@@ -50,6 +50,27 @@ function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDE
     return minval
 end
 
+function update_control_shifted!(
+        cache::FVCache{T},
+        control_shift_strategy::AbstractControlShift,
+        u::AbstractVector{T},
+        t::Real
+    ) where {T <: AbstractFloat}
+    smooth_control!(cache.u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
+    smooth_control!(cache.s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
+
+    shift = Int(round(get_control_shift(control_shift_strategy, u, t) / cache.dx))
+    if shift != 0
+        circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
+        circshift!(cache.s_t_shifted, cache.s_t, shift)
+    else
+        cache.u_p_t_shifted .= cache.u_p_t
+        cache.s_t_shifted .= cache.s_t
+    end
+
+    return nothing
+end
+
 function split_sol_view(uλ::Vector{T}) where {T <: Real}
     N = Int(length(uλ) / 2)
     u = @view uλ[1:N]
@@ -199,7 +220,35 @@ function cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)
     params = prob.params
     N = params.N
     uview = @view u[1:N]
-    return cfl_dtmax(params, uview, prob.method.cache)
+    cache = prob.method.cache
+    update_control_shifted!(cache, prob.control_shift_strategy, uview, t)
+
+    Δx = cache.dx
+    umax = RDE.turbo_maximum_abs(uview)
+    adv_dt = umax > zero(umax) ? (Δx / umax) : eltype(uview)(Inf)
+
+    diff_dt_u = iszero(params.ν_1) ? eltype(uview)(Inf) : (Δx^2 / (2 * params.ν_1))
+    diff_dt_λ = iszero(params.ν_2) ? eltype(uview)(Inf) : (Δx^2 / (2 * params.ν_2))
+
+    u_c = params.u_c
+    α = params.α
+    k_param = params.k_param
+
+    ω_max = zero(eltype(uview))
+    β_max = zero(eltype(uview))
+    @inbounds @turbo for i in eachindex(uview)
+        u_val = uview[i]
+        ω_val = ω(u_val, u_c, α)
+        β_val = β(u_val, cache.s_t_shifted[i], cache.u_p_t_shifted[i], k_param)
+        ω_max = max(ω_max, ω_val)
+        β_max = max(β_max, β_val)
+    end
+
+    react_sum_max = ω_max + β_max
+    react_dt = react_sum_max > zero(react_sum_max) ? inv(react_sum_max) : eltype(uview)(Inf)
+
+    minval = min(adv_dt, diff_dt_u, diff_dt_λ, react_dt)
+    return minval
 end
 
 """
@@ -370,89 +419,78 @@ function shift_by_interdistances(us::AbstractArray, x::AbstractArray, pos::Abstr
     return shifted_us
 end
 
-const SHOCK_DATA = let
-    try
-        # Get path to Artifacts.toml
-        artifacts_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
-
-        # Ensure artifact is installed
-        data_hash = artifact_hash("data", artifacts_toml)
-        if data_hash === nothing
-            @warn "Artifact 'data' not found in Artifacts.toml"
-            return nothing
-        end
-
-        # This will download the artifact if it's not already present
-        ensure_artifact_installed("data", artifacts_toml)
-
-        # Get the artifact directory
-        data_dir = artifact_path(data_hash)
-        data_file = joinpath(data_dir, "shocks.jld2")
-
-        if !isfile(data_file)
-            @warn "Shock data file not found in artifact: $data_file"
-            return nothing
-        end
-
-        Dict(n => Dict(:u => (load(data_file, "u$n")), :λ => (load(data_file, "λ$n"))) for n in 1:4)
-    catch e
-        @warn "Failed to load shock data from artifact: $e"
-        return nothing
-    end
-end
-
 const SHOCK_PRESSURES = [0.5f0, 0.65f0, 0.85f0, 0.98f0]
 
-const SHOCK_MATRICES = let
-    if !@isdefined(SHOCK_DATA) || (@isdefined(SHOCK_DATA) && SHOCK_DATA === nothing)
-        @warn "SHOCK_DATA not available, returning empty shock matrices"
-        (shocks = zeros(Float64, 0, 0), fuels = zeros(Float64, 0, 0))
-    else
-        shocks = hcat(SHOCK_DATA[1][:u], SHOCK_DATA[2][:u], SHOCK_DATA[3][:u], SHOCK_DATA[4][:u])
-        fuels = hcat(SHOCK_DATA[1][:λ], SHOCK_DATA[2][:λ], SHOCK_DATA[3][:λ], SHOCK_DATA[4][:λ])
-        (shocks = shocks, fuels = fuels)
-    end
-end
-
-#TODO: deprecate this?
-const SHOCK_SPEED_MODEL = let
+function load_shock_artifacts()
     try
-        # Get path to Artifacts.toml
         artifacts_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
-
-        # Ensure artifact is installed
         data_hash = artifact_hash("data", artifacts_toml)
         if data_hash === nothing
             @warn "Artifact 'data' not found in Artifacts.toml"
-            return nothing
+            return (
+                data = nothing,
+                matrices = (shocks = zeros(Float64, 0, 0), fuels = zeros(Float64, 0, 0)),
+                speed_model = nothing,
+            )
         end
 
-        # This will download the artifact if it's not already present
         ensure_artifact_installed("data", artifacts_toml)
-
-        # Get the artifact directory
         data_dir = artifact_path(data_hash)
-        data_file = joinpath(data_dir, "speed_model.jld2")
 
-        if !isfile(data_file)
-            @warn "Shock speed model file not found in artifact: $data_file"
-            return nothing
+        data = nothing
+        shocks_file = joinpath(data_dir, "shocks.jld2")
+        if isfile(shocks_file)
+            data = Dict(n => Dict(:u => (load(shocks_file, "u$n")), :λ => (load(shocks_file, "λ$n"))) for n in 1:4)
+        else
+            @warn "Shock data file not found in artifact: $shocks_file"
         end
 
-        load_object(data_file)
+        matrices = if data === nothing
+            @warn "SHOCK_DATA not available, returning empty shock matrices"
+            (shocks = zeros(Float64, 0, 0), fuels = zeros(Float64, 0, 0))
+        else
+            shocks = hcat(data[1][:u], data[2][:u], data[3][:u], data[4][:u])
+            fuels = hcat(data[1][:λ], data[2][:λ], data[3][:λ], data[4][:λ])
+            (shocks = shocks, fuels = fuels)
+        end
+
+        speed_model = nothing
+        speed_file = joinpath(data_dir, "speed_model.jld2")
+        if isfile(speed_file)
+            speed_model = load_object(speed_file)
+        else
+            @warn "Shock speed model file not found in artifact: $speed_file"
+        end
+
+        return (data = data, matrices = matrices, speed_model = speed_model)
     catch e
-        @warn "Failed to load shock speed model from artifact: $e"
-        return nothing
+        @warn "Failed to load shock artifacts: $e"
+        return (
+            data = nothing,
+            matrices = (shocks = zeros(Float64, 0, 0), fuels = zeros(Float64, 0, 0)),
+            speed_model = nothing,
+        )
     end
 end
 
+const SHOCK_ARTIFACTS = load_shock_artifacts()
+const SHOCK_DATA = SHOCK_ARTIFACTS.data
+const SHOCK_MATRICES = SHOCK_ARTIFACTS.matrices
+const SHOCK_SPEED_MODEL = SHOCK_ARTIFACTS.speed_model
+
 function predict_speed(u_p::T, n_shocks::Integer) where {T <: AbstractFloat}
+    if SHOCK_SPEED_MODEL === nothing
+        throw(ErrorException("Shock speed model unavailable. Ensure the `data` artifact is installed."))
+    end
     new_data = DataFrame(u_p = [u_p], shocks = [n_shocks])
     ŷ = predict(SHOCK_SPEED_MODEL, new_data)[1]
     return T(ŷ)
 end
 
 function predict_speed(u_p::AbstractArray{T}, n_shocks::Integer) where {T <: AbstractFloat}
+    if SHOCK_SPEED_MODEL === nothing
+        throw(ErrorException("Shock speed model unavailable. Ensure the `data` artifact is installed."))
+    end
     new_data = DataFrame(
         u_p = collect(u_p),
         shocks = fill(n_shocks, length(u_p))
@@ -462,6 +500,9 @@ function predict_speed(u_p::AbstractArray{T}, n_shocks::Integer) where {T <: Abs
 end
 
 function predict_speed(u_p::T, n_shocks::AbstractArray{Int}) where {T <: AbstractFloat}
+    if SHOCK_SPEED_MODEL === nothing
+        throw(ErrorException("Shock speed model unavailable. Ensure the `data` artifact is installed."))
+    end
     new_data = DataFrame(
         u_p = fill(u_p, length(n_shocks)),
         shocks = collect(n_shocks)
@@ -471,6 +512,9 @@ function predict_speed(u_p::T, n_shocks::AbstractArray{Int}) where {T <: Abstrac
 end
 
 function predict_speed(u_p::AbstractArray{T}, n_shocks::AbstractArray{Int}) where {T <: AbstractFloat}
+    if SHOCK_SPEED_MODEL === nothing
+        throw(ErrorException("Shock speed model unavailable. Ensure the `data` artifact is installed."))
+    end
     if length(u_p) != length(n_shocks)
         throw(DimensionMismatch("Length of u_p ($(length(u_p))) must match length of n_shocks ($(length(n_shocks)))"))
     end

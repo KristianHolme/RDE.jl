@@ -1,6 +1,8 @@
 # RDE.jl
 
 [![Build Status](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/KristianHolme/RDE.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+[![JET](https://img.shields.io/badge/JET.jl-enabled-blue)](https://github.com/aviatesk/JET.jl)
 
 ## Overview
 
@@ -43,6 +45,14 @@ solve_pde!(rde_prob)
 plot_solution(rde_prob)
 ```
 
+### Solver options
+
+The solver defaults to a conservative finite-volume discretization with an explicit SSPRK integrator and CFL-based steps. You can override the integrator and time stepping options:
+
+```julia
+solve_pde!(rde_prob; alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+```
+
 ### Custom Initial Conditions
 ```julia
 reset_strategy = NShock(2) # Initialize with 2 shocks
@@ -63,6 +73,10 @@ prob = RDEProblem(params;reset_strategy)
 solve_pde!(prob)
 plot_solution(prob)
 ```
+
+## Artifacts
+
+Some reset strategies and predictors rely on artifact data (shock profiles and speed model). These are initialized at package load time; if the artifacts are missing, the package will warn and the related features will throw a clear error when used.
 
 
 

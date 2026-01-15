@@ -9,20 +9,21 @@ Plot the solution of an RDE problem with interactive visualization.
 # Keywords
 - `time_idx::Observable{Int}=Observable(1)`: Observable for current time index
 - `player_controls::Bool=true`: Whether to include playback controls
+- `show_metrics::Bool=false`: Whether to include energy balance and chamber pressure plots
 
 # Returns
 - `Figure`: Makie figure containing the visualization
 
 The plot includes:
 - Velocity field (u) and reaction progress (λ) in both linear and circular representations
-- Energy balance over time
-- Chamber pressure over time
+- Energy balance and chamber pressure over time (if `show_metrics=true`)
 - Interactive time controls (if `player_controls=true`)
 """
 function plot_solution(
         prob::RDEProblem;
         time_idx = Observable(1),
-        player_controls = true
+        player_controls = true,
+        show_metrics = false
     )
     params = prob.params
     sol = prob.sol
@@ -39,28 +40,33 @@ function plot_solution(
     fig = Figure(size = (1000, 600))
     upper_area = fig[1, 1] = GridLayout()
     plotting_area = fig[2, 1] = GridLayout()
-    metrics_area = fig[3, 1][1, 1] = GridLayout()
+    lower_area = fig[3, 1] = GridLayout()
 
 
     main_plotting(plotting_area, x, u_data, λ_data, params; u_max = u_max)
 
-    # Add energy_balance_plot
-    energy_bal = energy_balance(sol.u, params)
-    ax_eb = Axis(metrics_area[1, 1], title = "Energy balance", xlabel = "t", ylabel = "Ė")
-    lines!(ax_eb, sol.t, energy_bal)
-    vlines!(ax_eb, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
+    if show_metrics
+        metrics_area = lower_area[1, 1] = GridLayout()
 
-    # Add chamber pressure
-    chamber_p = chamber_pressure(sol.u, params)
-    ax_cp = Axis(metrics_area[1, 2], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
-    lines!(ax_cp, sol.t, chamber_p)
-    vlines!(ax_cp, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
+        # Add energy_balance_plot
+        energy_bal = energy_balance(sol.u, params)
+        ax_eb = Axis(metrics_area[1, 1], title = "Energy balance", xlabel = "t", ylabel = "Ė")
+        lines!(ax_eb, sol.t, energy_bal)
+        vlines!(ax_eb, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
+
+        # Add chamber pressure
+        chamber_p = chamber_pressure(sol.u, params)
+        ax_cp = Axis(metrics_area[1, 2], title = "Chamber pressure", xlabel = "t", ylabel = "̄u²")
+        lines!(ax_cp, sol.t, chamber_p)
+        vlines!(ax_cp, @lift(sol.t[$time_idx]), color = :green, alpha = 0.5)
+    end
 
     # Time label
     label = Label(upper_area[1, 1], text = @lift("Time: $(round(t_values[$time_idx], digits = 2))"), tellwidth = false)
 
     if player_controls
-        play_ctrl_area = fig[3, 1][1, 2] = GridLayout()
+        ctrl_col = show_metrics ? 2 : 1
+        play_ctrl_area = lower_area[1, ctrl_col] = GridLayout()
         colsize!(play_ctrl_area, 1, Auto(2.0))
         plot_controls(play_ctrl_area, time_idx, num_times)
     end
@@ -202,24 +208,33 @@ function plot_controls(play_ctrl_area::GridLayout, time_idx::Observable, num_tim
         end
     end
 
-    # Animation loop
-    return @async begin
-        while true
-            if playing[]
-                time_idx[] = min(time_idx[] + 1, num_times)
-                if time_idx[] == num_times
-                    if !looping[]
-                        playing[] = false
-                        play.label[] = "Play"
-                    else
-                        time_idx[] = 1
-                    end
+    scene = top_scene(play_ctrl_area)
+    accumulator = Observable(0.0)
+    tick_listener = on(events(scene).tick) do tick
+        playing[] || return
+
+        accumulator[] += tick.delta_time
+        target_dt = 0.05 / anim_speed[]
+        while accumulator[] >= target_dt
+            accumulator[] -= target_dt
+            time_idx[] = min(time_idx[] + 1, num_times)
+            if time_idx[] == num_times
+                if !looping[]
+                    playing[] = false
+                    play.label[] = "Play"
+                else
+                    time_idx[] = 1
                 end
-                set_close_to!(time_sld, time_idx[])
             end
-            sleep(0.05 / anim_speed[])
+            set_close_to!(time_sld, time_idx[])
         end
     end
+
+    finalizer(scene) do _
+        Observables.off(tick_listener)
+    end
+
+    return tick_listener
 end
 
 """

@@ -36,6 +36,20 @@ function resample_data(data::Vector{T}, N::Int) where {T}
     end
 end
 
+function require_shock_data()
+    if SHOCK_DATA === nothing
+        throw(ErrorException("Shock data unavailable. Ensure the `data` artifact is installed."))
+    end
+    return nothing
+end
+
+function require_shock_matrices()
+    if SHOCK_DATA === nothing || size(SHOCK_MATRICES.shocks, 1) == 0
+        throw(ErrorException("Shock data matrices unavailable. Ensure the `data` artifact is installed."))
+    end
+    return nothing
+end
+
 function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::Default) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
     x = prob.x
     prob.u0 .= default_u.(x)
@@ -45,6 +59,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
 end
 
 function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::NShock) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    require_shock_data()
     n = reset_strategy.n
     if !(1 ≤ n ≤ 4)
         throw(ArgumentError("n must be between 1 and 4"))
@@ -65,6 +80,7 @@ end
 
 
 function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    require_shock_matrices()
     weights = softmax(rand(T, 4), T(reset_strategy.temp))
 
     # Use pre-computed matrices
@@ -133,6 +149,7 @@ struct WeightedCombination <: AbstractReset
 end
 
 function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::WeightedCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+    require_shock_matrices()
     wT = T.(reset_strategy.weights)
     wave = SHOCK_MATRICES.shocks * wT
     fuel = SHOCK_MATRICES.fuels * wT

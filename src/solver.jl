@@ -45,21 +45,13 @@ Compute the refueling function β(u).
 β(u, s, u_p, k) = s * u_p / (1 + exp(k * (u - u_p)))
 
 """
-    write_advection!(du, u, cache)
+    write_advection!(du, cache)
 
-Write the advective contribution into `du` using dispatch over cache type.
-For conservative FV cache, uses `cache.adv`. Otherwise uses `-u .* u_x`.
+Write the conservative advective contribution from `cache.adv` into `du`.
 """
-function write_advection!(du::AbstractVector{T}, u::AbstractVector{T}, cache::FVCache{T}) where {T}
+function write_advection!(du::AbstractVector{T}, cache::FVCache{T}) where {T}
     @turbo for i in eachindex(du)
         du[i] = cache.adv[i]
-    end
-    return nothing
-end
-
-function write_advection!(du::AbstractVector{T}, u::AbstractVector{T}, cache::AbstractRDECache{T}) where {T}
-    @turbo for i in eachindex(du)
-        du[i] = -u[i] * cache.u_x[i]
     end
     return nothing
 end
@@ -114,25 +106,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: Abstra
     ωu = cache.ωu                  # Real array of size N
     ξu = cache.ξu                  # Real array of size N
     βu = cache.βu                  # Real array of size N
-    u_p_t = cache.u_p_t
-    s_t = cache.s_t
-
-    # Update control values with smooth transition
-    smooth_control!(u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
-    smooth_control!(s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
-
-    # Calculate shift based on current time
-    dx = cache.dx
-    shift = Int(round(get_control_shift(prob.control_shift_strategy, u, t) / dx))
-
-    # Apply shifts
-    if shift != 0
-        circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
-        circshift!(cache.s_t_shifted, cache.s_t, shift)
-    else
-        cache.u_p_t_shifted .= cache.u_p_t
-        cache.s_t_shifted .= cache.s_t
-    end
+    update_control_shifted!(cache, prob.control_shift_strategy, u, t)
 
     # @logmsg LogLevel(-10000) "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
     # @logmsg LogLevel(-10000) "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
@@ -143,7 +117,7 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: Abstra
 
     @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
 
-    write_advection!(du, u, cache)
+    write_advection!(du, cache)
     @turbo @. du = du + (one(T) - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
 
     @turbo @. dλ = (one(T) - λ) * ωu - βu * λ + ν_2 * λ_xx
@@ -153,7 +127,7 @@ end
 
 
 """
-    solve_pde!(prob::RDEProblem; solver=Tsit5(), kwargs...)
+    solve_pde!(prob::RDEProblem; kwargs...)
 
 Solve the RDE system using the specified ODE solver.
 
@@ -161,7 +135,9 @@ Solve the RDE system using the specified ODE solver.
 - `prob`: RDE problem containing initial conditions and parameters
 
 # Keywords
-- `solver=Tsit5()`: ODE solver to use (default: Tsit5)
+- `alg=SSPRK33()`: ODE solver to use (default: SSPRK33)
+- `adaptive=false`: Whether to use adaptive time stepping
+- `dt=nothing`: Fixed time step to use when `adaptive=false`
 - `kwargs...`: Additional arguments passed to OrdinaryDiffEq.solve
 
 # Implementation Notes
@@ -174,16 +150,33 @@ Solve the RDE system using the specified ODE solver.
 ```julia
 prob = RDEProblem(params)
 solve_pde!(prob)
-solve_pde!(prob, solver=Rodas4())  # Use a different solver
+solve_pde!(prob; alg=OrdinaryDiffEq.SSPRK33())  # Use a different solver
 ```
 """
-function solve_pde!(prob::RDEProblem; saveframes = 75, kwargs...)
+function solve_pde!(
+        prob::RDEProblem;
+        saveframes = 75,
+        alg = SSPRK33(),
+        adaptive = false,
+        dt = nothing,
+        callback = nothing,
+        kwargs...
+    )
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
     saveat = prob.params.tmax / saveframes
 
     uλ_0 = vcat(prob.u0, prob.λ0)
     prob_ode = ODEProblem(RDE_RHS!, uλ_0, tspan, prob)
-    sol = solve_pde_step(prob, prob_ode; saveat = saveat, kwargs...)
+    sol = solve_pde_step(
+        prob,
+        prob_ode;
+        alg = alg,
+        adaptive = adaptive,
+        dt = dt,
+        callback = callback,
+        saveat = saveat,
+        kwargs...
+    )
     if sol.retcode != :Success
         @warn "failed to solve PDE"
     end
@@ -192,12 +185,15 @@ function solve_pde!(prob::RDEProblem; saveframes = 75, kwargs...)
     return prob
 end
 
-function solve_pde_step(rdeproblem::RDEProblem{T, M, R, C}, ode_problem::ODEProblem; kwargs...) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
-    sol = OrdinaryDiffEq.solve(ode_problem, Tsit5(); adaptive = true, isoutofdomain = outofdomain, kwargs...)
-    return sol
-end
-
-function solve_pde_step(rde_problem::RDEProblem{T, FiniteVolumeMethod, R, C}, ode_problem::ODEProblem; kwargs...) where {T <: AbstractFloat, R <: AbstractReset, C <: AbstractControlShift}
+function solve_pde_step(
+        rde_problem::RDEProblem{T, M, R, C},
+        ode_problem::ODEProblem;
+        alg,
+        adaptive,
+        dt,
+        callback,
+        kwargs...
+    ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
     cfl_cb = StepsizeLimiter(
         cfl_dtFE;
         safety_factor = T(0.62),
@@ -205,9 +201,24 @@ function solve_pde_step(rde_problem::RDEProblem{T, FiniteVolumeMethod, R, C}, od
         cached_dtcache = zero(T)
     )
 
-    N = rde_problem.params.N
-    dt0 = cfl_dtmax(rde_problem.params, @view(ode_problem.u0[1:N]), rde_problem.method.cache)
+    if callback === nothing && adaptive == false
+        callback = cfl_cb
+    end
 
-    sol = OrdinaryDiffEq.solve(ode_problem, SSPRK33(); adaptive = false, dt = dt0, isoutofdomain = outofdomain, callback = cfl_cb, kwargs...)
+    dt0 = if adaptive == false && dt === nothing
+        cfl_dtFE(ode_problem.u0, rde_problem, zero(T))
+    else
+        dt
+    end
+
+    sol = OrdinaryDiffEq.solve(
+        ode_problem,
+        alg;
+        adaptive = adaptive,
+        dt = dt0,
+        isoutofdomain = outofdomain,
+        callback = callback,
+        kwargs...
+    )
     return sol
 end
