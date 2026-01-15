@@ -156,10 +156,6 @@ solve_pde!(prob; alg=OrdinaryDiffEq.SSPRK33())  # Use a different solver
 function solve_pde!(
         prob::RDEProblem;
         saveframes = 75,
-        alg = SSPRK33(),
-        adaptive = false,
-        dt = nothing,
-        callback = nothing,
         kwargs...
     )
     tspan = (zero(typeof(prob.params.tmax)), prob.params.tmax)
@@ -188,10 +184,10 @@ end
 function solve_pde_step(
         rde_problem::RDEProblem{T, M, R, C},
         ode_problem::ODEProblem;
-        alg,
-        adaptive,
-        dt,
-        callback,
+        alg = SSPRK33(),
+        adaptive = false,
+        dt = nothing,
+        callback = nothing,
         kwargs...
     ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
     cfl_cb = StepsizeLimiter(
