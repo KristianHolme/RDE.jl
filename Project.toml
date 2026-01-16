@@ -1,6 +1,6 @@
 name = "RDE"
 uuid = "1d57ab14-0807-4ee5-93aa-665821a12dfd"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Kristian Holme"]
 
 [deps]
