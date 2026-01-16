@@ -30,7 +30,7 @@ end
         @test length(result) == 8
         @test all(isfinite.(result))
         @test typeof(result) == Vector{T}
-        
+
         # First element should be close to original first element
         @test abs(result[1] - data[1]) < 1.0e-5
     end
@@ -41,15 +41,15 @@ end
     for T in [Float32, Float64]
         # Create periodic data: [1, 2, 3, 4, 1, 2, 3, 4]
         data = T[1.0, 2.0, 3.0, 4.0]
-        
+
         # Upsample to 8 points - last point should interpolate between 4 and 1 (wrapped)
         result = RDE.resample_data(data, 8)
-        
+
         # The last point should be close to interpolating between data[4] and data[1]
         # Since we're at position 8 mapping to ~4.5 in periodic [1, 5), it should be
         # between data[4] and wrapped data[1]
         @test result[end] ≈ T(0.5) * (data[4] + data[1]) atol = T(1.0e-5)
-        
+
         # First element should match
         @test result[1] ≈ data[1] atol = T(1.0e-5)
     end
@@ -61,17 +61,17 @@ end
         L = 16
         x = range(T(0), T(2π), length = L)
         data = sin.(x)  # Periodic function
-        
+
         # Upsample
         result_up = RDE.resample_data(data, 2 * L)
         @test length(result_up) == 2 * L
         @test all(isfinite.(result_up))
-        
+
         # Downsample
         result_down = RDE.resample_data(data, L ÷ 2)
         @test length(result_down) == L ÷ 2
         @test all(isfinite.(result_down))
-        
+
         # Verify periodicity: first and last should match for complete period
         # (For a full period of sine, sin(0) ≈ sin(2π))
         @test abs(result_up[1] - result_up[end]) < T(1.0e-3)
@@ -85,18 +85,18 @@ end
         data1 = T[5.0]
         result1 = RDE.resample_data(data1, 1)
         @test result1 == data1
-        
+
         # Single element upsampled
         result1_up = RDE.resample_data(data1, 4)
         @test length(result1_up) == 4
         @test all(result1_up .≈ T(5.0))
-        
+
         # Two elements
         data2 = T[1.0, 2.0]
         result2 = RDE.resample_data(data2, 4)
         @test length(result2) == 4
         @test all(isfinite.(result2))
-        
+
         # Large upsampling
         data_small = T[1.0, 2.0, 3.0]
         result_large = RDE.resample_data(data_small, 100)
@@ -110,11 +110,11 @@ end
     for T in [Float32, Float64]
         # Strictly increasing data
         data_increasing = T[i for i in 1:10]
-        
+
         # Downsample
         result_down = RDE.resample_data(data_increasing, 5)
         @test result_down[1] < result_down[end]  # Should still be increasing overall
-        
+
         # Upsample
         result_up = RDE.resample_data(data_increasing, 20)
         @test result_up[1] < result_up[end]  # Should still be increasing overall
