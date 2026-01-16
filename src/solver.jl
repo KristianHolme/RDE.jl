@@ -166,10 +166,6 @@ function solve_pde!(
     sol = solve_pde_step(
         prob,
         prob_ode;
-        alg = alg,
-        adaptive = adaptive,
-        dt = dt,
-        callback = callback,
         saveat = saveat,
         kwargs...
     )
