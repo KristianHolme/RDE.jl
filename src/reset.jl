@@ -6,6 +6,36 @@ function default_λ(x::T) where {T <: AbstractFloat}
     return T(0.5)
 end
 
+# function resample_data(data::Vector{T}, N::Int) where {T}
+#     L = length(data)
+#     if N == L
+#         return copy(data)
+#     elseif N < L
+#         # For downsampling, use regular sampling
+#         indices = round.(Int, range(1, L, length = N))
+#         return data[indices]
+#     else
+#         # For upsampling, use FFT interpolation
+#         # This preserves periodicity and is fast for power-of-2 sizes
+#         fft_data = fft(data)
+#         n_freq = length(fft_data) ÷ 2
+
+#         # Pad or truncate in frequency domain
+#         new_fft = zeros(Complex{T}, N)
+#         if N ≤ 2n_freq
+#             new_fft[1:(N ÷ 2)] = fft_data[1:(N ÷ 2)]
+#             new_fft[(end - N ÷ 2 + 1):end] = fft_data[(end - N ÷ 2 + 1):end]
+#         else
+#             new_fft[1:n_freq] = fft_data[1:n_freq]
+#             new_fft[(end - n_freq + 1):end] = fft_data[(end - n_freq + 1):end]
+#         end
+
+#         # Scale to preserve amplitude
+#         new_fft .*= N / L
+#         return real.(ifft(new_fft))
+#     end
+# end
+
 function resample_data(data::Vector{T}, N::Int) where {T}
     L = length(data)
     if N == L
@@ -15,24 +45,36 @@ function resample_data(data::Vector{T}, N::Int) where {T}
         indices = round.(Int, range(1, L, length = N))
         return data[indices]
     else
-        # For upsampling, use FFT interpolation
-        # This preserves periodicity and is fast for power-of-2 sizes
-        fft_data = fft(data)
-        n_freq = length(fft_data) ÷ 2
+        # For upsampling, use periodic linear interpolation
+        # This preserves periodicity without requiring FFT
+        result = Vector{T}(undef, N)
+        L_float = T(L)
+        N_float = T(N)
 
-        # Pad or truncate in frequency domain
-        new_fft = zeros(Complex{T}, N)
-        if N ≤ 2n_freq
-            new_fft[1:(N ÷ 2)] = fft_data[1:(N ÷ 2)]
-            new_fft[(end - N ÷ 2 + 1):end] = fft_data[(end - N ÷ 2 + 1):end]
-        else
-            new_fft[1:n_freq] = fft_data[1:n_freq]
-            new_fft[(end - n_freq + 1):end] = fft_data[(end - n_freq + 1):end]
+        @inbounds for i in 1:N
+            # Map index i in [1, N] to continuous position in [1, L+1)
+            # Position L+1 wraps to position 1 due to periodicity
+            pos = T(1) + (T(i) - T(1)) * L_float / N_float
+
+            # Handle wrapping: if pos >= L+1, it wraps to [1, 2)
+            if pos >= L_float + T(1)
+                pos -= L_float
+            end
+
+            # Get integer and fractional parts
+            idx_low = floor(Int, pos)
+            frac = pos - T(idx_low)
+
+            # Handle periodic boundary: wrap idx_high around
+            idx_high = idx_low + 1
+            if idx_high > L
+                idx_high = 1
+            end
+
+            # Linear interpolation between adjacent points
+            result[i] = (T(1) - frac) * data[idx_low] + frac * data[idx_high]
         end
-
-        # Scale to preserve amplitude
-        new_fft .*= N / L
-        return real.(ifft(new_fft))
+        return result
     end
 end
 

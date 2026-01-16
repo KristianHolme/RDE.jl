@@ -2,7 +2,6 @@
 module RDE
 using CircularArrays
 using DataFrames
-using FFTW
 using FileIO
 using GLM
 using Interpolations
