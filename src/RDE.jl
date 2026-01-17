@@ -27,7 +27,7 @@ export plot_solution
 export animate_RDE
 export energy_balance, chamber_pressure
 export RDE_RHS!
-export AbstractMethod, FiniteVolumeMethod, reset_cache!
+export AbstractMethod, FiniteVolumeMethod
 export AbstractLimiter, MinmodLimiter, MCLimiter
 export AbstractReset, Default, NShock, RandomCombination,
     RandomShockOrCombination, RandomShock, ShiftReset,
