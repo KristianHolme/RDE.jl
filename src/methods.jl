@@ -7,7 +7,7 @@ function init_cache!(method::FiniteVolumeMethod{T, L}, params::RDEParam{T}, dx::
     return method.cache = FVCache{T}(params)
 end
 
-function reset_cache!(cache::AbstractRDECache; τ_smooth::AbstractFloat, params::RDEParam)
+function _reset_cache!(cache::AbstractRDECache; τ_smooth::AbstractFloat, params::RDEParam)
     cache.τ_smooth = τ_smooth
     fill!(cache.u_p_previous, params.u_p)
     fill!(cache.u_p_current, params.u_p)
