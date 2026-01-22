@@ -35,6 +35,12 @@ export AbstractReset, Default, NShock, RandomCombination,
     RandomReset, EvalCycleShockReset
 export AbstractControlShift, ZeroControlShift, LinearControlShift
 
+# Utilities used by downstream packages
+export SHOCK_PRESSURES, count_shocks, shock_indices, split_sol, split_sol_view
+export periodic_diff, smooth_g, get_control_shift, get_dx
+export turbo_column_maximum, turbo_column_maximum!, turbo_diff_norm, turbo_extrema
+export turbo_maximum, turbo_minimum, turbo_maximum_abs, turbo_maximum_abs_diff
+
 # Core simulator includes
 include("control.jl")      # Control strategies
 include("types.jl")        # Base types
