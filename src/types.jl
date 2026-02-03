@@ -93,6 +93,9 @@ mutable struct FVCache{T <: AbstractFloat} <: AbstractRDECache{T}
     s_t::Vector{T}
     u_p_t_shifted::Vector{T}
     s_t_shifted::Vector{T}
+    spatial_kernel_width::Int
+    spatial_kernel::Vector{T}
+    spatial_scratch::Vector{T}
 end
 
 """
@@ -127,6 +130,9 @@ function FVCache{T}(params::RDEParam{T}) where {T <: AbstractFloat}
         fill(params.s, N),    # s_t
         fill(params.u_p, N),  # u_p_t_shifted
         fill(params.s, N),    # s_t_shifted
+        0,                    # spatial_kernel_width (disabled)
+        Vector{T}(),          # spatial_kernel
+        zeros(T, N),          # spatial_scratch
     )
 end
 

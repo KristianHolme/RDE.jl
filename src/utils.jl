@@ -59,6 +59,11 @@ function update_control_shifted!(
     smooth_control!(cache.u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
     smooth_control!(cache.s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
 
+    if cache.spatial_kernel_width > 0
+        smooth_spatial!(cache.u_p_t, cache.spatial_scratch, cache.spatial_kernel)
+        smooth_spatial!(cache.s_t, cache.spatial_scratch, cache.spatial_kernel)
+    end
+
     shift = Int(round(get_control_shift(control_shift_strategy, u, t) / cache.dx))
     if shift != 0
         circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
@@ -68,6 +73,22 @@ function update_control_shifted!(
         cache.s_t_shifted .= cache.s_t
     end
 
+    return nothing
+end
+
+function set_spatial_control_smoothing!(cache::FVCache{T}, width_points::Int) where {T <: AbstractFloat}
+    width_points = normalize_width_points(width_points)
+    cache.spatial_kernel_width = width_points
+    if width_points == 0
+        cache.spatial_kernel = Vector{T}()
+        return nothing
+    end
+    cache.spatial_kernel = build_spatial_kernel(width_points, T)
+    half = (length(cache.spatial_kernel) - 1) ÷ 2
+    scratch_length = cache.N + 2 * half
+    if length(cache.spatial_scratch) != scratch_length
+        cache.spatial_scratch = zeros(T, scratch_length)
+    end
     return nothing
 end
 
