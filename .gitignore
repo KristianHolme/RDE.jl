@@ -4,3 +4,4 @@ videos/
 /_research*
 .vscode/
 temp/
+benchmark_results/
