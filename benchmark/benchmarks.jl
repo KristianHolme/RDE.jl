@@ -64,13 +64,13 @@ utils = BenchmarkGroup()
 SUITE["utils"] = utils
 
 utils["shock_locations"] = @benchmarkable begin
-    shock_locations(u, dx)
+    RDE.shock_locations(u, dx)
 end setup = begin
     u, dx = BenchUtils.setup_shock_inputs()
 end evals = 1 samples = BenchUtils.DEFAULT_SAMPLES
 
 utils["shock_indices"] = @benchmarkable begin
-    shock_indices(u, dx)
+    RDE.shock_indices(u, dx)
 end setup = begin
     u, dx = BenchUtils.setup_shock_inputs()
 end evals = 1 samples = BenchUtils.DEFAULT_SAMPLES

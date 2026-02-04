@@ -1,10 +1,10 @@
 module BenchUtils
 
 using RDE
-const DEFAULT_N = 256
+const DEFAULT_N = 512
 const DEFAULT_TMAX = 5.0f0
 const DEFAULT_SAMPLES = 200
-const DEFAULT_SAVEFRAMES = 5
+const DEFAULT_SAVEFRAMES = 10
 const DEFAULT_SPATIAL_WIDTH = 9
 
 function make_params(; T = Float32, N = DEFAULT_N, tmax = DEFAULT_TMAX)

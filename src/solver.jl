@@ -169,7 +169,7 @@ function solve_pde!(
         saveat = saveat,
         kwargs...
     )
-    if sol.retcode != :Success
+    if sol.retcode != ReturnCode.Success
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
