@@ -329,27 +329,34 @@ Find the locations of shocks in a periodic function.
 function shock_locations(u::AbstractArray{T}, dx::T) where {T <: AbstractFloat}
     N = length(u)
     L = N * dx
-    minu, maxu = RDE.turbo_extrema(u)
+    minu, maxu = turbo_extrema(u)
     span = maxu - minu
     if span < T(1.0e-1)
         return CircularArray(fill(false, N))
     end
-    # threshold = span / dx * T(0.06)
     threshold = span * T(0.06 * 512 / L)
-    u_diff = periodic_ddx(u, dx)
-    shocks = CircularArray(-u_diff .> threshold)
     backwards_block_distance = L * T(0.06)
     backwards_block = ceil(Int, backwards_block_distance / dx)
-    @inbounds @views begin
-        i = findfirst(shocks)
-        while i !== nothing
-            if any(shocks[(i + 1):(i + backwards_block)])
-                shocks[i] = false
+    shocks = Vector{Bool}(undef, N)
+    @turbo for i in 1:(N - 2)
+        d = (-3 * u[i] + 4 * u[i + 1] - u[i + 2]) / (2 * dx)
+        shocks[i] = (-d > threshold)
+    end
+    @inbounds for i in (N - 1):N
+        d = (-3 * u[i] + 4 * u[mod1(i + 1, N)] - u[mod1(i + 2, N)]) / (2 * dx)
+        shocks[i] = (-d > threshold)
+    end
+    @inbounds for i in 1:N
+        if shocks[i]
+            for k in 1:backwards_block
+                if shocks[mod1(i + k, N)]
+                    shocks[i] = false
+                    break
+                end
             end
-            i = findnext(shocks, i + 1)
         end
     end
-    return shocks
+    return CircularArray(shocks)
 end
 
 """
