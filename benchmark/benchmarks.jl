@@ -1,6 +1,6 @@
 using BenchmarkTools
-using OrdinaryDiffEq
 using RDE
+using RDE.OrdinaryDiffEq
 
 include("bench_utils.jl")
 using .BenchUtils
