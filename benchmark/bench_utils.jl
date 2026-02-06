@@ -16,35 +16,43 @@ function make_problem(;
         T = Float32,
         N = DEFAULT_N,
         tmax = DEFAULT_TMAX,
-        reset_strategy = Default(),
-        control_shift_strategy = ZeroControlShift(),
-        method = FiniteVolumeMethod{T}()
+        spatial_smoothing_width::Int = 0,
+        kwargs...
     )
     params = make_params(; T = T, N = N, tmax = tmax)
     prob = RDEProblem(
         params;
-        reset_strategy = reset_strategy,
-        method = method,
-        control_shift_strategy = control_shift_strategy
+        kwargs...
     )
+    if spatial_smoothing_width > 0
+        set_spatial_control_smoothing!(prob.method.cache, spatial_smoothing_width)
+    end
     return prob
 end
 
-function setup_solve_problem(; T = Float32, N = DEFAULT_N, tmax = DEFAULT_TMAX)
-    prob = make_problem(; T = T, N = N, tmax = tmax)
+function setup_solve_problem(;
+        T = Float32,
+        N = DEFAULT_N,
+        tmax = DEFAULT_TMAX,
+        kwargs...
+    )
+    prob = make_problem(; T = T, N = N, tmax = tmax, kwargs...)
     return prob
 end
 
-function setup_rhs(; T = Float32, N = DEFAULT_N, tmax = DEFAULT_TMAX)
-    prob = make_problem(; T = T, N = N, tmax = tmax)
+function setup_rhs(;
+        T = Float32,
+        kwargs...
+    )
+    prob = make_problem(; T = T, kwargs...)
     uλ = vcat(prob.u0, prob.λ0)
     duλ = similar(uλ)
     t = zero(T)
     return prob, uλ, duλ, t
 end
 
-function setup_shock_inputs(; T = Float32, N = DEFAULT_N)
-    prob = make_problem(; T = T, N = N, tmax = DEFAULT_TMAX)
+function setup_shock_inputs(; kwargs...)
+    prob = make_problem(; kwargs...)
     dx = get_dx(prob)
     u = copy(prob.u0)
     return u, dx
@@ -61,10 +69,10 @@ function setup_control_shift(;
         ; T = T,
         N = N,
         tmax = tmax,
-        control_shift_strategy = control_shift_strategy
+        control_shift_strategy = control_shift_strategy,
+        spatial_smoothing_width = width_points
     )
     cache = prob.method.cache
-    set_spatial_control_smoothing!(cache, width_points)
     u = prob.u0
     t = T(2) * cache.dx
     return cache, control_shift_strategy, u, t
@@ -80,22 +88,17 @@ function setup_smooth_control(; T = Float32, N = DEFAULT_N)
     return target, t, control_t, current, previous, τ_smooth
 end
 
-function setup_smooth_spatial(;
-        T = Float32,
-        N = DEFAULT_N,
-        width_points = DEFAULT_SPATIAL_WIDTH
-    )
-    prob = make_problem(; T = T, N = N, tmax = DEFAULT_TMAX)
+function setup_smooth_spatial(; kwargs...)
+    prob = make_problem(; kwargs...)
     cache = prob.method.cache
-    set_spatial_control_smoothing!(cache, width_points)
     target = copy(cache.s_t)
     scratch = cache.spatial_scratch
     kernel = cache.spatial_kernel
     return target, scratch, kernel
 end
 
-function setup_cfl_dtFE(; T = Float32, N = DEFAULT_N, tmax = DEFAULT_TMAX)
-    prob = make_problem(; T = T, N = N, tmax = tmax)
+function setup_cfl_dtFE(; T = Float32, kwargs...)
+    prob = make_problem(; kwargs...)
     uλ = vcat(prob.u0, prob.λ0)
     t = zero(T)
     return uλ, prob, t

@@ -59,11 +59,6 @@ function update_control_shifted!(
     smooth_control!(cache.u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
     smooth_control!(cache.s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
 
-    if cache.spatial_kernel_width > 0
-        smooth_spatial!(cache.u_p_t, cache.spatial_scratch, cache.spatial_kernel)
-        smooth_spatial!(cache.s_t, cache.spatial_scratch, cache.spatial_kernel)
-    end
-
     shift = Int(round(get_control_shift(control_shift_strategy, u, t) / cache.dx))
     if shift != 0
         circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
@@ -89,6 +84,14 @@ function set_spatial_control_smoothing!(cache::FVCache{T}, width_points::Int) wh
     if length(cache.spatial_scratch) != scratch_length
         cache.spatial_scratch = zeros(T, scratch_length)
     end
+    return nothing
+end
+
+function apply_spatial_smoothing!(v::AbstractVector{T}, cache::FVCache{T}) where {T <: AbstractFloat}
+    if cache.spatial_kernel_width <= 0
+        return nothing
+    end
+    smooth_spatial!(v, cache.spatial_scratch, cache.spatial_kernel)
     return nothing
 end
 
@@ -257,7 +260,7 @@ function cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)
 
     ω_max = zero(eltype(uview))
     β_max = zero(eltype(uview))
-    @inbounds @turbo for i in eachindex(uview)
+    @turbo for i in eachindex(uview)
         u_val = uview[i]
         ω_val = ω(u_val, u_c, α)
         β_val = β(u_val, cache.s_t_shifted[i], cache.u_p_t_shifted[i], k_param)
