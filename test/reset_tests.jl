@@ -186,6 +186,27 @@ end
     end
 end
 
+@testitem "CustomPressureReset constructors" begin
+    function custom_profile(x)
+        return abs.(x)
+    end
+
+    reset_direct = CustomPressureReset(custom_profile)
+    @test reset_direct isa CustomPressureReset{typeof(custom_profile)}
+
+    reset_do = CustomPressureReset() do x
+        T = eltype(x)
+        return abs.(x) ./ T(π)
+    end
+    @test !(fieldtype(typeof(reset_do), :f) === Function)
+
+    prob = RDEProblem(RDEParam{Float32}(N = 32), reset_strategy = reset_do)
+    @test length(prob.u0) == prob.params.N
+    @test all(isfinite.(prob.u0))
+    @test all(prob.u0 .>= 0.0f0)
+    @test prob.params.u_p ≈ 0.5f0
+end
+
 @testitem "EvalCycleShockReset Initialization" begin
     reset_strat = EvalCycleShockReset(4)
     @test reset_strat.repetitions_per_config == 4

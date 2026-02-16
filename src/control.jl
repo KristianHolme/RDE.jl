@@ -2,8 +2,8 @@ abstract type AbstractControlShift end
 
 struct ZeroControlShift <: AbstractControlShift end
 
-struct LinearControlShift <: AbstractControlShift
-    c::Real
+struct LinearControlShift{T <: Real} <: AbstractControlShift
+    c::T
 end
 
 """

@@ -23,6 +23,36 @@ end
     @test typeof(fv_method_default) == FiniteVolumeMethod{Float32, MCLimiter}
 end
 
+@testitem "Control shift concrete field type" begin
+    shift32 = LinearControlShift(0.5f0)
+    @test shift32 isa LinearControlShift{Float32}
+    @test shift32.c isa Float32
+
+    shift64 = LinearControlShift(0.5)
+    @test shift64 isa LinearControlShift{Float64}
+    @test shift64.c isa Float64
+end
+
+@testitem "Reset constructor concrete field types" begin
+    random_combination32 = RandomCombination()
+    @test random_combination32 isa RandomCombination{Float32}
+    @test random_combination32.temp isa Float32
+
+    random_combination64 = RandomCombination(temp = 0.25)
+    @test random_combination64 isa RandomCombination{Float64}
+    @test random_combination64.temp isa Float64
+
+    random_shock_or_combination32 = RandomShockOrCombination()
+    @test random_shock_or_combination32 isa RandomShockOrCombination{Float32, Float32}
+    @test random_shock_or_combination32.shock_prob isa Float32
+    @test random_shock_or_combination32.temp isa Float32
+
+    random_shock_or_combination64 = RandomShockOrCombination(shock_prob = 0.8, temp = 0.15)
+    @test random_shock_or_combination64 isa RandomShockOrCombination{Float64, Float64}
+    @test random_shock_or_combination64.shock_prob isa Float64
+    @test random_shock_or_combination64.temp isa Float64
+end
+
 @testitem "Cache Initialization" begin
     params = RDEParam{Float32}(N = 16)
     dx = Float32(2π / 16)

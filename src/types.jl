@@ -181,13 +181,21 @@ struct NShock <: AbstractReset
     n::Int
 end
 
-@kwdef struct RandomCombination <: AbstractReset
-    temp::Real = 0.2f0
+struct RandomCombination{T <: Real} <: AbstractReset
+    temp::T
 end
 
-@kwdef struct RandomShockOrCombination <: AbstractReset
-    shock_prob::Real = 0.5f0
-    temp::Real = 0.2f0
+function RandomCombination(; temp = 0.2f0)
+    return RandomCombination{typeof(temp)}(temp)
+end
+
+struct RandomShockOrCombination{P <: Real, T <: Real} <: AbstractReset
+    shock_prob::P
+    temp::T
+end
+
+function RandomShockOrCombination(; shock_prob = 0.5f0, temp = 0.2f0)
+    return RandomShockOrCombination{typeof(shock_prob), typeof(temp)}(shock_prob, temp)
 end
 
 struct RandomShock <: AbstractReset end
@@ -196,8 +204,8 @@ struct ShiftReset{R <: AbstractReset} <: AbstractReset
     reset_strategy::R
 end
 
-struct CustomPressureReset <: AbstractReset
-    f::Function
+struct CustomPressureReset{F} <: AbstractReset
+    f::F
 end
 
 ## Problem type
