@@ -50,26 +50,27 @@ plot_solution(rde_prob)
 The solver defaults to a conservative finite-volume discretization with an explicit SSPRK integrator and CFL-based steps. You can override the integrator and time stepping options:
 
 ```julia
+using OrdinaryDiffEq
 solve_pde!(rde_prob; alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
 ```
 
 ### Custom Initial Conditions
 ```julia
-reset_strategy = NShock(2) # Initialize with 2 shocks
-prob = RDEProblem(params;reset_strategy)
+params = RDEParam()  # or RDEParam(; N = 32, tmax = 0.01) for a quick run
+prob = RDEProblem(params; reset_strategy = NShock(2))  # Initialize with 2 shocks
 solve_pde!(prob)
 
 # Or use random shock initialization (1-4 shocks)
-reset_strategy = RandomShock() 
+reset_strategy = RandomShock()
 params = RDEParam()
-prob = RDEProblem(params;reset_strategy)
+prob = RDEProblem(params; reset_strategy)
 
-# or use a custom function for the u-variable
+# or use a custom function for the u-variable (x is the spatial grid vector)
 reset_strategy = CustomPressureReset() do x
   T = eltype(x)
-  return abs(x)/T(π)
+  return abs.(x) ./ T(π)
 end
-prob = RDEProblem(params;reset_strategy)
+prob = RDEProblem(params; reset_strategy)
 solve_pde!(prob)
 plot_solution(prob)
 ```
