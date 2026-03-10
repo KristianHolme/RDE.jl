@@ -410,7 +410,7 @@ Shift solution arrays in a moving frame with velocity c.
 - Vector of shifted solutions
 """
 function shift_inds_old(us::AbstractArray{T}, x::AbstractArray{T}, ts::AbstractArray{T}, c::T) where {T <: AbstractFloat}
-    c = fill(c, length(ts) - one(T))
+    c = fill(c, length(ts) - 1)
     pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances_old(us, x, pos)
 end
@@ -421,7 +421,7 @@ function shift_inds_old(us::AbstractArray{T}, x::AbstractArray{T}, ts::AbstractA
 end
 
 function shift_inds(us::Vector{Vector{T}}, x::AbstractVector{T}, ts::AbstractVector{T}, c::T) where {T <: AbstractFloat}
-    c = fill(c, length(ts) - one(T))
+    c = fill(c, length(ts) - 1)
     pos = [zero(T); cumsum(c .* diff(ts))]
     return shift_by_interdistances(us, x, pos)
 end
