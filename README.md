@@ -19,17 +19,23 @@ u_{t}+ uu_{x} = (1-\lambda)\omega(u)q_0 + \nu_1 u_{xx} + \epsilon \xi (u, u_0)
 
 ## Installation
 
-You can install RDE.jl using Julia's built-in package manager. From the Julia REPL, type `]` to enter the Pkg REPL mode and run:
+The package is registered in a custom package registry, `KristianHolmeRegistry`. To install the package through the registry, first add the registry.
+From the Julia REPL, type `]` to enter the Pkg REPL mode and run:
+
+```julia
+pkg> registry add https://github.com/KristianHolme/KristianHolmeRegistry
+```
+
+and then install with
+
+```julia
+pkg> add RDE
+```
+
+If you don't want to add the custom registry, you can install RDE.jl directly from github.
 
 ```julia
 pkg> add https://github.com/KristianHolme/RDE.jl
-```
-
-Or, you can use the Pkg API from the Julia REPL:
-
-```julia
-using Pkg
-Pkg.add(url="https://github.com/KristianHolme/RDE.jl")
 ```
 
 ## Examples
