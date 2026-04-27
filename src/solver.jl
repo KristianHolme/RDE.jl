@@ -150,7 +150,7 @@ Solve the RDE system using the specified ODE solver.
 ```julia
 prob = RDEProblem(params)
 solve_pde!(prob)
-solve_pde!(prob; alg=OrdinaryDiffEq.SSPRK33())  # Use a different solver
+solve_pde!(prob; alg = SSPRK33())  # Use a different solver
 ```
 """
 function solve_pde!(

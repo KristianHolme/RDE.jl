@@ -12,6 +12,7 @@ using LoopVectorization
 using Makie
 using Observables
 using OrdinaryDiffEq
+using OrdinaryDiffEqSSPRK
 using DiffEqCallbacks
 using Pkg.Artifacts
 using ProgressMeter

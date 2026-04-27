@@ -154,6 +154,13 @@ struct MCLimiter <: AbstractLimiter end
 mutable struct FiniteVolumeMethod{T <: AbstractFloat, L <: AbstractLimiter} <: AbstractMethod
     limiter::L
     cache::Union{Nothing, FVCache{T}}
+
+    function FiniteVolumeMethod{T, L}(limiter::L, ::Nothing) where {T <: AbstractFloat, L <: AbstractLimiter}
+        return new{T, L}(limiter, nothing)
+    end
+    function FiniteVolumeMethod{T, L}(limiter::L, cache::FVCache{T}) where {T <: AbstractFloat, L <: AbstractLimiter}
+        return new{T, L}(limiter, cache)
+    end
 end
 
 function Base.show(io::IO, method::FiniteVolumeMethod{T, L}) where {T, L}
