@@ -4,7 +4,7 @@
     for T in [Float32, Float64]
         prob = RDEProblem(RDEParam{T}(N = 512, tmax = 0.01))
         solve_pde!(prob)
-        @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+        @test SciMLBase.successful_retcode(prob.sol)
     end
 end
 
@@ -50,7 +50,7 @@ end
     for T in [Float32, Float64]
         prob = RDEProblem(RDEParam{T}(N = 512, tmax = 5.0))
         solve_pde!(prob)
-        @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+        @test SciMLBase.successful_retcode(prob.sol)
     end
 end
 
@@ -112,10 +112,10 @@ end
     prob = RDEProblem(params)
 
     solve_pde!(prob)
-    @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+    @test SciMLBase.successful_retcode(prob.sol)
 
     solve_pde!(prob; alg = SSPRK33(), adaptive = false)
-    @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+    @test SciMLBase.successful_retcode(prob.sol)
 
     # Test saveframes option
     solve_pde!(prob, saveframes = 100)

@@ -169,7 +169,7 @@ function solve_pde!(
         saveat = saveat,
         kwargs...
     )
-    if sol.retcode != ReturnCode.Success
+    if !SciMLBase.successful_retcode(sol)
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct
