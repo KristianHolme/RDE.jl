@@ -1,9 +1,10 @@
 @testitem "Basic Solver" begin
     using OrdinaryDiffEq
+    using OrdinaryDiffEqSSPRK
     for T in [Float32, Float64]
         prob = RDEProblem(RDEParam{T}(N = 512, tmax = 0.01))
         solve_pde!(prob)
-        @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+        @test SciMLBase.successful_retcode(prob.sol)
     end
 end
 
@@ -45,15 +46,17 @@ end
 
 @testitem "Long Integration" begin
     using OrdinaryDiffEq
+    using OrdinaryDiffEqSSPRK
     for T in [Float32, Float64]
         prob = RDEProblem(RDEParam{T}(N = 512, tmax = 5.0))
         solve_pde!(prob)
-        @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+        @test SciMLBase.successful_retcode(prob.sol)
     end
 end
 
 @testitem "FV shock speed (Burgers limit)" begin
     using OrdinaryDiffEq
+    using OrdinaryDiffEqSSPRK
     params = RDEParam{Float32}(
         N = 256,
         L = 2π,
@@ -75,7 +78,6 @@ end
     prob.u0 .= ifelse.(x .< x0, uL, uR)
     prob.λ0 .= 0.5f0
 
-    using OrdinaryDiffEqSSPRK
     solve_pde!(prob; saveframes = 10, alg = SSPRK33(), adaptive = false)
     u_final, = RDE.split_sol(prob.sol.u[end])
 
@@ -93,9 +95,9 @@ end
 
 @testitem "FV solution bounds" begin
     using OrdinaryDiffEq
+    using OrdinaryDiffEqSSPRK
     params = RDEParam{Float32}(N = 128, tmax = 0.5f0)
     prob = RDEProblem(params)
-    using OrdinaryDiffEqSSPRK
     solve_pde!(prob; saveframes = 5, alg = SSPRK33(), adaptive = false)
 
     u_final, λ_final = RDE.split_sol(prob.sol.u[end])
@@ -105,15 +107,15 @@ end
 
 @testitem "Solver Options" begin
     using OrdinaryDiffEq
+    using OrdinaryDiffEqSSPRK
     params = RDEParam{Float32}(N = 512, tmax = 1.0)
     prob = RDEProblem(params)
 
     solve_pde!(prob)
-    @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+    @test SciMLBase.successful_retcode(prob.sol)
 
-    using OrdinaryDiffEqSSPRK
     solve_pde!(prob; alg = SSPRK33(), adaptive = false)
-    @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
+    @test SciMLBase.successful_retcode(prob.sol)
 
     # Test saveframes option
     solve_pde!(prob, saveframes = 100)

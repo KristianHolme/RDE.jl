@@ -147,7 +147,7 @@ Solve the RDE system using the specified ODE solver.
 ```julia
 prob = RDEProblem(params)
 solve_pde!(prob)
-solve_pde!(prob; alg=OrdinaryDiffEq.SSPRK33())  # Use a different solver
+solve_pde!(prob; alg = SSPRK33())  # Use a different solver
 ```
 """
 function solve_pde!(
@@ -166,7 +166,7 @@ function solve_pde!(
         saveat = saveat,
         kwargs...
     )
-    if sol.retcode != ReturnCode.Success
+    if !SciMLBase.successful_retcode(sol)
         @warn "failed to solve PDE"
     end
     # Store the solution in the struct

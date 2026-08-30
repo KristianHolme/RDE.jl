@@ -1,6 +1,7 @@
 using BenchmarkTools
 using RDE
 using RDE.OrdinaryDiffEq
+using RDE.OrdinaryDiffEqSSPRK
 
 include("bench_utils.jl")
 using .BenchUtils
@@ -14,7 +15,7 @@ solver["solve_pde"] = @benchmarkable begin
     solve_pde!(
         prob;
         saveframes = BenchUtils.DEFAULT_SAVEFRAMES,
-        alg = OrdinaryDiffEq.SSPRK33(),
+        alg = SSPRK33(),
         adaptive = false
     )
 end setup = begin
@@ -25,7 +26,7 @@ solver["solve_pde_no_smoothing_no_shift"] = @benchmarkable begin
     solve_pde!(
         prob;
         saveframes = BenchUtils.DEFAULT_SAVEFRAMES,
-        alg = OrdinaryDiffEq.SSPRK33(),
+        alg = SSPRK33(),
         adaptive = false
     )
 end setup = begin
@@ -39,7 +40,7 @@ solver["solve_pde_no_smoothing_shift"] = @benchmarkable begin
     solve_pde!(
         prob;
         saveframes = BenchUtils.DEFAULT_SAVEFRAMES,
-        alg = OrdinaryDiffEq.SSPRK33(),
+        alg = SSPRK33(),
         adaptive = false
     )
 end setup = begin
@@ -53,7 +54,7 @@ solver["solve_pde_smoothing_no_shift"] = @benchmarkable begin
     solve_pde!(
         prob;
         saveframes = BenchUtils.DEFAULT_SAVEFRAMES,
-        alg = OrdinaryDiffEq.SSPRK33(),
+        alg = SSPRK33(),
         adaptive = false
     )
 end setup = begin
@@ -67,7 +68,7 @@ solver["solve_pde_smoothing_shift"] = @benchmarkable begin
     solve_pde!(
         prob;
         saveframes = BenchUtils.DEFAULT_SAVEFRAMES,
-        alg = OrdinaryDiffEq.SSPRK33(),
+        alg = SSPRK33(),
         adaptive = false
     )
 end setup = begin
