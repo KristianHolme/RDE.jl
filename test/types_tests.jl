@@ -73,7 +73,8 @@ end
     @test prob.method isa FiniteVolumeMethod{Float32}
     @test prob.method.cache isa RDE.FVCache{Float32}
     @test prob.reset_strategy isa Default
-    @test prob.control_shift_strategy isa ZeroControlShift
+    @test RDE.control_shift(prob) isa ZeroControlShift
+    @test prob.injection isa UniformMultiStepPressureProfile
 
     prob_minmod = RDEProblem(params, method = FiniteVolumeMethod{Float32}(limiter = MinmodLimiter()))
     @test prob_minmod.method isa FiniteVolumeMethod{Float32, MinmodLimiter}

@@ -23,32 +23,22 @@ end
 end
 
 @testitem "apply_spatial_smoothing! reduces boundary jump in place" begin
-    params = RDEParam{Float32}(N = 64, tmax = 1.0f0)
-    prob = RDEProblem(params; control_shift_strategy = ZeroControlShift())
-    cache = prob.method.cache
-
-    RDE.set_spatial_control_smoothing!(cache, 9)
-    cache.u_p_current .= vcat(fill(0.0f0, params.N ÷ 2), fill(1.0f0, params.N ÷ 2))
-
-    boundary_index = params.N ÷ 2 + 1
-    jump_before = abs(cache.u_p_current[boundary_index] - cache.u_p_current[boundary_index - 1])
-
-    RDE.apply_spatial_smoothing!(cache.u_p_current, cache)
-
-    jump_after = abs(cache.u_p_current[boundary_index] - cache.u_p_current[boundary_index - 1])
+    N = 64
+    v = vcat(fill(0.0f0, N ÷ 2), fill(1.0f0, N ÷ 2))
+    kernel = RDE.build_spatial_kernel(9, Float32)
+    half = (length(kernel) - 1) ÷ 2
+    scratch = zeros(Float32, N + 2 * half)
+    boundary_index = N ÷ 2 + 1
+    jump_before = abs(v[boundary_index] - v[boundary_index - 1])
+    RDE.apply_spatial_smoothing!(v, kernel, scratch)
+    jump_after = abs(v[boundary_index] - v[boundary_index - 1])
     @test jump_after < jump_before
 end
 
-@testitem "apply_spatial_smoothing! is no-op when spatial_kernel_width is 0" begin
-    params = RDEParam{Float32}(N = 32, tmax = 1.0f0)
-    prob = RDEProblem(params; control_shift_strategy = ZeroControlShift())
-    cache = prob.method.cache
-    @test cache.spatial_kernel_width == 0
-
-    cache.u_p_current .= vcat(fill(0.0f0, params.N ÷ 2), fill(1.0f0, params.N ÷ 2))
-    expected = copy(cache.u_p_current)
-
-    RDE.apply_spatial_smoothing!(cache.u_p_current, cache)
-
-    @test cache.u_p_current == expected
+@testitem "apply_spatial_smoothing! is no-op when kernel is empty" begin
+    N = 32
+    v = vcat(fill(0.0f0, N ÷ 2), fill(1.0f0, N ÷ 2))
+    expected = copy(v)
+    RDE.apply_spatial_smoothing!(v, Float32[], Float32[])
+    @test v == expected
 end

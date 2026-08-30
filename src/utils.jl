@@ -50,48 +50,15 @@ function cfl_dtmax(params::RDEParam{T}, u::AbstractVector{T}, cache::AbstractRDE
     return minval
 end
 
-function update_control_shifted!(
-        cache::FVCache{T},
-        control_shift_strategy::AbstractControlShift,
-        u::AbstractVector{T},
-        t::Real
+function apply_spatial_smoothing!(
+        v::AbstractVector{T},
+        kernel::Vector{T},
+        scratch::Vector{T},
     ) where {T <: AbstractFloat}
-    smooth_control!(cache.u_p_t, t, cache.control_time, cache.u_p_current, cache.u_p_previous, cache.τ_smooth)
-    smooth_control!(cache.s_t, t, cache.control_time, cache.s_current, cache.s_previous, cache.τ_smooth)
-
-    shift = Int(round(get_control_shift(control_shift_strategy, u, t) / cache.dx))
-    if shift != 0
-        circshift!(cache.u_p_t_shifted, cache.u_p_t, shift)
-        circshift!(cache.s_t_shifted, cache.s_t, shift)
-    else
-        cache.u_p_t_shifted .= cache.u_p_t
-        cache.s_t_shifted .= cache.s_t
-    end
-
-    return nothing
-end
-
-function set_spatial_control_smoothing!(cache::FVCache{T}, width_points::Int) where {T <: AbstractFloat}
-    width_points = normalize_width_points(width_points)
-    cache.spatial_kernel_width = width_points
-    if width_points == 0
-        cache.spatial_kernel = Vector{T}()
+    if isempty(kernel)
         return nothing
     end
-    cache.spatial_kernel = build_spatial_kernel(width_points, T)
-    half = (length(cache.spatial_kernel) - 1) ÷ 2
-    scratch_length = cache.N + 2 * half
-    if length(cache.spatial_scratch) != scratch_length
-        cache.spatial_scratch = zeros(T, scratch_length)
-    end
-    return nothing
-end
-
-function apply_spatial_smoothing!(v::AbstractVector{T}, cache::FVCache{T}) where {T <: AbstractFloat}
-    if cache.spatial_kernel_width <= 0
-        return nothing
-    end
-    smooth_spatial!(v, cache.spatial_scratch, cache.spatial_kernel)
+    smooth_spatial!(v, scratch, kernel)
     return nothing
 end
 
@@ -245,7 +212,7 @@ function cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)
     N = params.N
     uview = @view u[1:N]
     cache = prob.method.cache
-    update_control_shifted!(cache, prob.control_shift_strategy, uview, t)
+    update_injection!(cache.u_p, cache.s, prob.injection, convert(eltype(uview), t))
 
     Δx = cache.dx
     umax = RDE.turbo_maximum_abs(uview)
@@ -263,7 +230,7 @@ function cfl_dtFE(u::AbstractVector, prob::RDEProblem, t)
     @turbo for i in eachindex(uview)
         u_val = uview[i]
         ω_val = ω(u_val, u_c, α)
-        β_val = β(u_val, cache.s_t_shifted[i], cache.u_p_t_shifted[i], k_param)
+        β_val = β(u_val, cache.s[i], cache.u_p[i], k_param)
         ω_max = max(ω_max, ω_val)
         β_max = max(β_max, β_val)
     end

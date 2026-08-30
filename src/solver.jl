@@ -77,7 +77,7 @@ The RDE system consists of coupled PDEs for velocity (u) and reaction progress (
 \\frac{∂λ}{∂t} = (1-λ)ω(u) - β(u)λ + ν_2\\frac{∂^2λ}{∂x^2}
 ```
 """
-function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, P}, t) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     N = prob.params.N
     ν_1 = prob.params.ν_1
     ν_2 = prob.params.ν_2
@@ -106,16 +106,13 @@ function RDE_RHS!(duλ, uλ, prob::RDEProblem{T, M, R, C}, t) where {T <: Abstra
     ωu = cache.ωu                  # Real array of size N
     ξu = cache.ξu                  # Real array of size N
     βu = cache.βu                  # Real array of size N
-    update_control_shifted!(cache, prob.control_shift_strategy, u, t)
-
-    # @logmsg LogLevel(-10000) "RHS:u_p_t $(cache.u_p_t_shifted), s_t $(cache.s_t_shifted) at time $t"
-    # @logmsg LogLevel(-10000) "RHS:u_p_current $(cache.u_p_current), s_current $(cache.s_current)"
+    update_injection!(cache.u_p, cache.s, prob.injection, T(t))
 
     @turbo @. ωu = ω(u, u_c, α)
 
     @turbo @. ξu = ξ(u, u_0, n)
 
-    @turbo @. βu = β(u, cache.s_t_shifted, cache.u_p_t_shifted, k_param)
+    @turbo @. βu = β(u, cache.s, cache.u_p, k_param)
 
     write_advection!(du, cache)
     @turbo @. du = du + (one(T) - λ) * ωu * q_0 + ν_1 * u_xx + ϵ * ξu
@@ -178,14 +175,14 @@ function solve_pde!(
 end
 
 function solve_pde_step(
-        rde_problem::RDEProblem{T, M, R, C},
+        rde_problem::RDEProblem{T, M, R, P},
         ode_problem::ODEProblem;
         alg = SSPRK33(),
         adaptive = false,
         dt = nothing,
         callback = nothing,
         kwargs...
-    ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, C <: AbstractControlShift}
+    ) where {T <: AbstractFloat, M <: FiniteVolumeMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     cfl_cb = StepsizeLimiter(
         cfl_dtFE;
         safety_factor = T(0.62),

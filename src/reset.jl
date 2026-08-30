@@ -92,7 +92,7 @@ function require_shock_matrices()
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::Default) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::Default) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     x = prob.x
     prob.u0 .= default_u.(x)
     prob.λ0 .= default_λ.(x)
@@ -100,7 +100,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::NShock) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::NShock) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     require_shock_data()
     n = reset_strategy.n
     if !(1 ≤ n ≤ 4)
@@ -121,7 +121,7 @@ function reset_state_and_pressure!(prob::RDEProblem, reset_strategy::RandomShock
 end
 
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::RandomCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     require_shock_matrices()
     weights = softmax(rand(T, 4), T(reset_strategy.temp))
 
@@ -138,7 +138,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomShockOrCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::RandomShockOrCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     if rand(T) < T(reset_strategy.shock_prob)
         reset_state_and_pressure!(prob, NShock(rand(1:4)))
     else
@@ -163,7 +163,7 @@ function SineCombination(; modes = 2:9)
     return SineCombination(collect(modes))
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::SineCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::SineCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     x = prob.x
     modes = reset_strategy.modes
     shifts = rand(T, length(modes)) .* (T(2) * T(π))
@@ -190,7 +190,7 @@ struct WeightedCombination <: AbstractReset
     end
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::WeightedCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::WeightedCombination) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     require_shock_matrices()
     wT = T.(reset_strategy.weights)
     wave = SHOCK_MATRICES.shocks * wT
@@ -205,7 +205,7 @@ function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy:
     return nothing
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CustomPressureReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::CustomPressureReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     x = prob.x
     prob.u0 .= T.(reset_strategy.f(x))
     prob.λ0 .= default_λ.(x)
@@ -219,7 +219,7 @@ end
 end
 
 #TODO: use a cycle(iterator), but only for julia 1.11+
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::CycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::CycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     reset_state_and_pressure!(prob, NShock(reset_strategy.shocks[mod1(reset_strategy.n, length(reset_strategy.shocks))]))
     reset_strategy.n += 1
     return nothing
@@ -227,7 +227,7 @@ end
 
 struct RandomReset <: AbstractReset end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::RandomReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::RandomReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     x = prob.x
     L = prob.params.L
 
@@ -275,7 +275,7 @@ mutable struct EvalCycleShockReset <: AbstractReset
     end
 end
 
-function reset_state_and_pressure!(prob::RDEProblem{T, M, R, C}, reset_strategy::EvalCycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+function reset_state_and_pressure!(prob::RDEProblem{T, M, R, P}, reset_strategy::EvalCycleShockReset) where {T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     reset_strategy.current_config += 1
     if reset_strategy.current_config > length(reset_strategy.init_shocks) #wrap around
         reset_strategy.current_config = 1

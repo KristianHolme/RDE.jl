@@ -64,11 +64,8 @@ Rusanov (Lax–Friedrichs) flux.
 - `dx`: Grid spacing
 - `N`: Number of grid points
 
-## Control Parameters
-- `u_p_current, u_p_previous`: Current and previous pressure values
-- `s_current, s_previous`: Current and previous s parameter values
-- `τ_smooth`: Smoothing time scale
-- `control_time`: Time of last control update
+## Live injection workspace
+- `u_p, s`: Injection fields written by `update_injection!` for `β`
 """
 mutable struct FVCache{T <: AbstractFloat} <: AbstractRDECache{T}
     u_xx::Vector{T}
@@ -83,19 +80,8 @@ mutable struct FVCache{T <: AbstractFloat} <: AbstractRDECache{T}
     adv::Vector{T}
     dx::T
     N::Int
-    u_p_current::Vector{T}
-    u_p_previous::Vector{T}
-    τ_smooth::T
-    s_previous::Vector{T}
-    s_current::Vector{T}
-    control_time::T
-    u_p_t::Vector{T}
-    s_t::Vector{T}
-    u_p_t_shifted::Vector{T}
-    s_t_shifted::Vector{T}
-    spatial_kernel_width::Int
-    spatial_kernel::Vector{T}
-    spatial_scratch::Vector{T}
+    u_p::Vector{T}
+    s::Vector{T}
 end
 
 """
@@ -120,19 +106,8 @@ function FVCache{T}(params::RDEParam{T}) where {T <: AbstractFloat}
         zeros(T, N),          # adv residual
         dx,                   # dx
         N,
-        fill(params.u_p, N),  # u_p_current
-        fill(params.u_p, N),  # u_p_previous
-        T(1),                 # τ_smooth
-        fill(params.s, N),    # s_previous
-        fill(params.s, N),    # s_current
-        T(0),                 # control_time
-        fill(params.u_p, N),  # u_p_t
-        fill(params.s, N),    # s_t
-        fill(params.u_p, N),  # u_p_t_shifted
-        fill(params.s, N),    # s_t_shifted
-        0,                    # spatial_kernel_width (disabled)
-        Vector{T}(),          # spatial_kernel
-        zeros(T, N),          # spatial_scratch
+        fill(params.u_p, N),  # u_p
+        fill(params.s, N),    # s
     )
 end
 
@@ -210,7 +185,7 @@ end
 
 ## Problem type
 """
-    RDEProblem{T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, C<:AbstractControlShift}
+    RDEProblem{T<:AbstractFloat, M<:AbstractMethod, R<:AbstractReset, P<:AbstractInjectionProfile}
 
 Main problem type for the rotating detonation engine solver.
 
@@ -222,9 +197,9 @@ Main problem type for the rotating detonation engine solver.
 - `reset_strategy::AbstractReset`: Reset strategy
 - `sol::Union{Nothing, Any}`: Solution (if computed)
 - `method::AbstractMethod`: Numerical method
-- `control_shift_strategy::AbstractControlShift`: Control shift strategy
+- `injection::AbstractInjectionProfile`: Injection `u_p(x, t)` / `s(x, t)`
 """
-mutable struct RDEProblem{T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, C <: AbstractControlShift}
+mutable struct RDEProblem{T <: AbstractFloat, M <: AbstractMethod, R <: AbstractReset, P <: AbstractInjectionProfile}
     params::RDEParam{T}
     u0::Vector{T}
     λ0::Vector{T}
@@ -232,5 +207,5 @@ mutable struct RDEProblem{T <: AbstractFloat, M <: AbstractMethod, R <: Abstract
     reset_strategy::R
     sol::Union{Nothing, SciMLBase.ODESolution}
     method::M
-    control_shift_strategy::C
+    injection::P
 end

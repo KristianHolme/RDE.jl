@@ -12,6 +12,7 @@ using LoopVectorization
 using Makie
 using Observables
 using OrdinaryDiffEq
+using OrdinaryDiffEqSSPRK
 using DiffEqCallbacks
 using Pkg.Artifacts
 using ProgressMeter
@@ -34,15 +35,24 @@ export AbstractReset, Default, NShock, RandomCombination,
     SineCombination, WeightedCombination, CustomPressureReset, CycleShockReset,
     RandomReset, EvalCycleShockReset
 export AbstractControlShift, ZeroControlShift, LinearControlShift
+export AbstractInjectionProfile, AbstractMultiStepSmoother
+export ConstantInjectionProfile, UniformMultiStepPressureProfile, SpatialMultiStepPressureProfile
+export MovingFrameInjectionProfile, CinftySmoother, LinearSmoother
+export update_injection!, commit_schedule!
+export current_u_p, previous_u_p, current_s, previous_s, mean_u_p, committed_pressure_delta
+export inner_profile, control_shift, is_uniform_injection
+export wrap_injection, default_uniform_injection, default_spatial_injection
+export fill_constant_schedule!, set_spatial_kernel!, commit_reset_injection!
 
 # Utilities used by downstream packages
 export SHOCK_PRESSURES, count_shocks, shock_indices, split_sol, split_sol_view
-export periodic_diff, smooth_g, get_control_shift, get_dx, set_spatial_control_smoothing!, apply_spatial_smoothing!
+export periodic_diff, smooth_g, get_control_shift, get_dx, apply_spatial_smoothing!
 export turbo_column_maximum, turbo_column_maximum!, turbo_diff_norm, turbo_extrema
 export turbo_maximum, turbo_minimum, turbo_maximum_abs, turbo_maximum_abs_diff
 
 # Core simulator includes
 include("control.jl")      # Control strategies
+include("injection.jl")    # Injection profiles
 include("types.jl")        # Base types
 include("reset.jl")        # Reset strategies
 include("methods.jl")      # Method implementations

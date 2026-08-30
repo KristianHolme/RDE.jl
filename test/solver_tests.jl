@@ -75,7 +75,8 @@ end
     prob.u0 .= ifelse.(x .< x0, uL, uR)
     prob.λ0 .= 0.5f0
 
-    solve_pde!(prob; saveframes = 10, alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+    using OrdinaryDiffEqSSPRK
+    solve_pde!(prob; saveframes = 10, alg = SSPRK33(), adaptive = false)
     u_final, = RDE.split_sol(prob.sol.u[end])
 
     dx = RDE.get_dx(prob)
@@ -94,7 +95,8 @@ end
     using OrdinaryDiffEq
     params = RDEParam{Float32}(N = 128, tmax = 0.5f0)
     prob = RDEProblem(params)
-    solve_pde!(prob; saveframes = 5, alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+    using OrdinaryDiffEqSSPRK
+    solve_pde!(prob; saveframes = 5, alg = SSPRK33(), adaptive = false)
 
     u_final, λ_final = RDE.split_sol(prob.sol.u[end])
     @test all(u_final .>= 0.0f0)
@@ -109,7 +111,8 @@ end
     solve_pde!(prob)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
-    solve_pde!(prob; alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+    using OrdinaryDiffEqSSPRK
+    solve_pde!(prob; alg = SSPRK33(), adaptive = false)
     @test prob.sol.retcode == OrdinaryDiffEq.ReturnCode.Success
 
     # Test saveframes option
