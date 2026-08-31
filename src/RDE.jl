@@ -2,12 +2,12 @@
 module RDE
 using CircularArrays
 using DataFrames
-using FileIO
+# using FileIO
 using GLM
-using Interpolations
+# using Interpolations
 using JLD2
-using LinearAlgebra
-using Logging
+# using LinearAlgebra
+# using Logging
 using LoopVectorization
 using Makie
 using Observables
@@ -17,8 +17,8 @@ using DiffEqCallbacks
 using Pkg.Artifacts
 using ProgressMeter
 using Random
-using Statistics
-using StatsModels
+# using Statistics
+# using StatsModels
 
 using PrecompileTools
 
