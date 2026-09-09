@@ -58,8 +58,42 @@ plot_solution(rde_prob)
 The solver defaults to a conservative finite-volume discretization with an explicit SSPRK integrator and CFL-based steps. You can override the integrator and time stepping options:
 
 ```julia
-using OrdinaryDiffEq
-solve_pde!(rde_prob; alg = OrdinaryDiffEq.SSPRK33(), adaptive = false)
+using OrdinaryDiffEqSSPRK
+solve_pde!(rde_prob; alg = SSPRK33(), adaptive = false)
+```
+
+### Injection profiles
+
+Injection `u_p(x, t)` and `s(x, t)` live on `RDEProblem` as `prob.injection`. The RHS samples them each step with `update_injection!`. Construction without an `injection` argument builds a uniform C∞ multi-step hold at `params.u_p` / `params.s`. Reset then fills that same constant hold, so time-dependent control is installed afterwards with `commit_schedule!`.
+
+```julia
+params = RDEParam(; tmax = 10)
+prob = RDEProblem(params)  # UniformMultiStepPressureProfile at params.u_p
+commit_schedule!(prob.injection, 0.0f0, 2.0f0, 0.8f0)  # live value at t=0 → 0.8 at t=2
+solve_pde!(prob)
+```
+
+A vector of knots is a multi-step schedule. The default smoother is `CinftySmoother(τ)` (`τ_smooth = 1`): C∞ step-then-hold on each segment. Construct the profile with `LinearSmoother()` for linear interpolation between knots.
+
+```julia
+commit_schedule!(prob.injection, 0.0f0, [2.0f0, 5.0f0], [0.8f0, 0.3f0])
+```
+
+Pass `spatial_kernel_width > 0` for a spatial profile. New knots are smoothed at commit time only; the previous live field is not re-smoothed.
+
+```julia
+params = RDEParam(; N = 64)
+prob = RDEProblem(params; spatial_kernel_width = 9)
+target = fill(0.8f0, params.N)
+target[1:(params.N ÷ 2)] .= 0.3f0
+commit_schedule!(prob.injection, 0.0f0, 1.0f0, target)
+```
+
+`control_shift_strategy` wraps the inner profile in a moving frame (`MovingFrameInjectionProfile`). You can also pass a prebuilt `injection`.
+
+```julia
+prob = RDEProblem(params; control_shift_strategy = LinearControlShift(1.0f0))
+prob = RDEProblem(params; injection = ConstantInjectionProfile(0.5f0, 3.5f0))
 ```
 
 ### Custom Initial Conditions
