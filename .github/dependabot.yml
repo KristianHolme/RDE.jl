@@ -8,6 +8,5 @@ updates:
   - package-ecosystem: "julia"
     directories:
       - "/"
-      - "/test"
     schedule:
       interval: "weekly"
